@@ -1,0 +1,59 @@
+DISTRICT PORTAL — BUILD PROMPT
+NYU Senior Seminar (Fall 2026) · pilot for NY State Senate District 20 (Sen. Zellnor Myrie)
+Last revised: 2026-07-15
+
+WHAT THIS IS
+A one-page dashboard that collates publicly available information about a single
+legislative district, so students can find it fast and then confirm it at the source.
+It is a starting point for reporting, never a citation.
+
+GROUND RULES (apply to every pane)
+- No invented data. A failed fetch shows an honest gap, never a guess or an interpolation.
+- Every pane names its source, the retrieval date, and what could be wrong with it.
+- Prefer primary sources (Census API, Board of Elections, NYC Open Data) over aggregators.
+- Charts start their y-axis at zero. Category and bracket choices are disclosed.
+- The page is a claim, not a fact. It says so, and tells the reader to cite the origin.
+
+WHAT THE PAGE CONTAINS
+1. Map of the district — current (2022) lines solid, previous (2012) lines dashed. Census TIGER/Line.
+2. Who are residents — population, median household income, share foreign-born, median age,
+   each shown against the citywide figure. Source: ACS 5-year (2020-24).
+3. Census detail — race/ethnicity and age vs. NYC; population and median income over time,
+   with the 2022 redistricting break marked. Source: ACS 5-year via the Census API.
+4. Background on the member — Wikipedia, election history with vote totals, signature priorities.
+5. Local news — last 6 months across local outlets, deduplicated, tagged by topic, filterable.
+6. Resources — primary-source portals for going deeper.
+
+HOW IT'S BUILT
+A single Python script (build/build_portal.py) fetches each source, writes one JSON file per
+pane (each with a provenance block), and bakes them into data/portal_data.js so the page runs
+from a static file or GitHub Pages. index.html is presentation only.
+
+REVISION LOG (prune as it grows — keep it short)
+- 2026-07-15  First pilot reviewed. Reframed the banner; led the stat tiles with labels and
+              citywide comparisons; grouped the Census panes under one source; added citywide
+              comparisons, the previous district lines, member background with elections, and a
+              6-month topic-filterable news feed; zeroed all chart axes; removed the instructional
+              voice from the page itself.
+- 2026-07-15  News: reverse-chron "DD/MM/YY (Outlet) Title" format, filter by topic AND outlet,
+              outlet buttons double as the source list, freshness badge (daily refresh planned).
+              Added a prominent "Suggest a change or addition" box (Google Form, no account needed).
+              Planned next: daily GitHub Action refresh; toggleable thematic map layers (precincts,
+              shootings, HPD violations, CVI sites); a member activity feed (legislation, testimony,
+              committee schedule + webcast, social posts).
+- 2026-07-15  Previous-lines overlay recolored orange for legibility. Added official social links
+              (X/IG/FB) + committees to the member box; fixed a dead campaign-site link; corrected
+              his chairmanship to Codes. Added a legislation pane (NY Senate Open Legislation API:
+              sponsored Senate bills + status) and an embedded @SenatorMyrie X timeline. Made the
+              map toggleable with two rigorous layers: police precincts and shootings (2021–),
+              clipped to the district. HPD violations + CVI sites deferred (need geocoding).
+- 2026-07-15  Legislation: split Leads (prime sponsor) vs Co-sponsor, no artificial cap, filter by
+              role + subject, date = introduction date. Removed the previous-district map overlay;
+              shaded/labeled precincts; clarified shooting colors (orange nonfatal / red fatal) and
+              that only geocoded incidents show. Excluded MaxPreps (HS sports) from news; "scraped"
+              wording. Pulled the X embed (won't load on local file://; retry once hosted on https).
+- 2026-07-15  Legislation relabeled Prime sponsor vs Co-sponsor with passage context (of 103 led,
+              3 signed / 77 in committee). Banner + footer aligned to content margins. Each precinct
+              its own color. Map reconceived as theme "pages": District / Criminal justice (precincts
+              + shootings) / Transit (subway + bus + Citi Bike) / Housing (residential evictions).
+              Stakeholders/nonprofits theme pending (needs IRS records + geocoding).

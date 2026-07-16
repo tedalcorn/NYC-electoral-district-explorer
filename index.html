@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>District Portal — NY Senate District 20</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="data/portal_data.js"></script>
+<style>
+:root{
+  --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --border:rgba(11,11,11,.10);
+  --s1:#2a78d6; --s2:#1baf7a; --warn-bg:#fdf6e3; --gap-bg:#f4f1fa; --chip:#eeede7;
+}
+@media (prefers-color-scheme: dark){:root{
+  --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --border:rgba(255,255,255,.10);
+  --s1:#3987e5; --s2:#199e70; --warn-bg:#2a2410; --gap-bg:#221d2e; --chip:#242422;
+}}
+*{box-sizing:border-box} body{margin:0;background:var(--page);color:var(--ink);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:22px 28px 14px;max-width:1400px}
+h1{margin:0;font-size:22px} h1 small{color:var(--ink2);font-weight:400}
+.banner{margin:10px 0 0;padding:11px 14px;background:var(--warn-bg);border:1px solid var(--border);
+  border-radius:8px;font-size:13.5px;color:var(--ink2)}
+.banner b{color:var(--ink)}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28px 40px;max-width:1400px}
+.pane{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+  display:flex;flex-direction:column}
+.pane h2{margin:0 0 2px;font-size:15px}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 10px}
+.prov{margin-top:auto;padding-top:10px;font-size:12px;color:var(--muted)}
+.prov summary{cursor:pointer;color:var(--ink2)}
+.prov a{color:var(--s1)}
+.prov .cav{margin:6px 0 0;padding:7px 9px;background:var(--warn-bg);border-radius:6px;color:var(--ink2)}
+.c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}
+@media(max-width:980px){.c8,.c6,.c4{grid-column:span 12}}
+#map{height:360px;border-radius:8px}
+.maplegend{font-size:12.5px;color:var(--ink2);margin:6px 0 0}
+.maplegend i{display:inline-block;width:22px;height:0;border-top:3px solid var(--s1);vertical-align:middle;margin-right:5px}
+.maplegend i.dash{border-top:3px dashed var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{padding:10px 11px;border:1px solid var(--border);border-radius:8px}
+.tile .l{font-size:12px;color:var(--ink2);margin-bottom:3px}
+.tile .v{font-size:21px;font-weight:650;line-height:1.1}
+.tile .cmp{font-size:11.5px;color:var(--muted);margin-top:3px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--grid);padding:4px 8px 4px 0}
+td{padding:5px 8px 5px 0;border-bottom:1px solid var(--grid)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+a{color:var(--s1);text-decoration:none} a:hover{text-decoration:underline}
+.gap{background:var(--gap-bg)}
+canvas{max-height:220px}
+.chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px 22px}
+@media(max-width:760px){.chartgrid{grid-template-columns:1fr}}
+.chartgrid h3{margin:0 0 2px;font-size:13.5px}
+.legend{font-size:12.5px;color:var(--ink2);margin:2px 0 6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px}
+.note{margin:6px 0 0;padding:7px 9px;background:var(--warn-bg);border-radius:6px;font-size:12.5px;color:var(--ink2)}
+details.tbl{font-size:12.5px;margin-top:6px;color:var(--ink2)}
+details.tbl summary{cursor:pointer;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.chip{border:1px solid var(--border);background:var(--chip);color:var(--ink2);border-radius:999px;
+  padding:3px 11px;font-size:12.5px;cursor:pointer;user-select:none}
+.chip.on{background:var(--s1);border-color:var(--s1);color:#fff}
+.art{font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--grid)}
+.art .meta{color:var(--muted);font-size:12px;white-space:nowrap}
+.newslist{max-height:520px;overflow-y:auto}
+footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
+.suggest{grid-column:span 12;background:var(--warn-bg);border:1.5px dashed var(--border);border-radius:12px;
+  padding:22px 20px;text-align:center}
+.suggest h2{margin:0 0 6px;font-size:16px}
+.suggest p{margin:0 auto 14px;max-width:580px;color:var(--ink2);font-size:13.5px}
+.btn{display:inline-block;background:var(--s1);color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;font-size:14px}
+.btn:hover{text-decoration:none;filter:brightness(1.08)}
+.chipgroup{margin:0 0 8px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}
+.chipgroup .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
+.fresh{display:inline-block;background:var(--s2);color:#fff;border-radius:999px;padding:1px 9px;font-size:11.5px;
+  font-weight:600;vertical-align:middle;margin-left:4px}
+.precinct-lbl{background:transparent;border:0;box-shadow:none;color:var(--ink);font-weight:700;font-size:12px;
+  text-shadow:0 0 3px var(--surface),0 0 3px var(--surface),0 0 3px var(--surface)}
+.precinct-lbl::before{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>District Portal — NY Senate District 20 <small>· Sen. Zellnor Myrie · Central Brooklyn</small></h1>
+  <div class="banner">This is a pilot dashboard built with AI assistance. It is meant to quickly collate
+  available information on the district, not as the source of that information. Treat each piece of
+  information on it as a <b>claim rather than a fact</b> and confirm them directly with the primary source —
+  <b>DO NOT CITE THIS PAGE</b>. Each visualization and field includes the name and URL of its source, when it
+  was retrieved, and considerations about the data. The prompts used to build it are
+  <a href="prompt.txt" target="_blank">summarized here</a>.</div>
+</header>
+<main>
+
+  <!-- SUGGEST -->
+  <section class="suggest">
+    <h2>Have an idea for this page?</h2>
+    <p>This dashboard is a work in progress, and there's room for yours. Suggest a source to add, a correction,
+    a new map layer, or anything else — no account needed.</p>
+    <a class="btn" id="suggestBtn" href="#" target="_blank">Suggest a change or addition →</a>
+  </section>
+
+  <!-- MAP -->
+  <section class="pane c8">
+    <h2>The district</h2>
+    <p class="sub">Central Brooklyn — pick a theme to overlay data</p>
+    <div class="chipgroup" id="mapThemes"></div>
+    <div id="map"></div>
+    <div class="maplegend" id="mapLegend"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div id="mapProv"></div>
+    </details>
+  </section>
+
+  <!-- WHO ARE RESIDENTS -->
+  <section class="pane c4">
+    <h2>Who are residents?</h2>
+    <p class="sub">American Community Survey (U.S. Census Bureau), 5-year estimates, 2020–2024</p>
+    <div class="stats" id="stats"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div>Source: <a href="https://censusreporter.org/profiles/61000US36020-state-senate-district-20-ny/" target="_blank">Census Reporter, SD-20 profile</a> (ACS 2020–24 5-year); citywide comparison from the Census API, place "New York city, NY", same vintage.</div>
+      <div class="cav">These are survey <b>estimates with margins of error</b> that this pane does not show. The charts below use the adjacent ACS vintage (2019–23), so small differences between panes are expected.</div>
+    </details>
+  </section>
+
+  <!-- CENSUS DETAIL -->
+  <section class="pane c12">
+    <h2>The district in the Census</h2>
+    <p class="sub">U.S. Census Bureau — American Community Survey (ACS), 5-year estimates</p>
+    <div class="chartgrid">
+      <div>
+        <h3>Race &amp; ethnicity — SD-20 vs NYC</h3>
+        <div class="legend"><i style="background:var(--s1)"></i>SD-20 <i style="background:var(--s2)"></i>NYC</div>
+        <canvas id="raceChart"></canvas>
+        <details class="tbl"><summary>Table view (exact values)</summary><div id="raceTbl"></div></details>
+      </div>
+      <div>
+        <h3>Age structure — SD-20 vs NYC</h3>
+        <div class="legend"><i style="background:var(--s1)"></i>SD-20 <i style="background:var(--s2)"></i>NYC</div>
+        <canvas id="ageChart"></canvas>
+        <details class="tbl"><summary>Table view (exact values)</summary><div id="ageTbl"></div></details>
+      </div>
+      <div>
+        <h3>Population over time</h3>
+        <div class="legend">ACS 5-year estimates, 2015–2023</div>
+        <canvas id="popChart"></canvas>
+        <div class="note"><b>The district was redrawn effective 2022</b> (dashed segment). Points left and right of the break describe <b>different territory</b>, not just change over time.</div>
+      </div>
+      <div>
+        <h3>Median household income over time</h3>
+        <div class="legend">ACS 5-year estimates, 2015–2023 · nominal dollars</div>
+        <canvas id="incChart"></canvas>
+        <div class="note">The ~$28k rise at 2022 is mostly the <b>redistricting</b>: the new lines added wealthier blocks. It is not a real one-year jump in income.</div>
+      </div>
+    </div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div>Source: U.S. Census Bureau, ACS 5-year estimates via the <a href="https://www.census.gov/data/developers/data-sets/acs-5year.html" target="_blank">Census API</a>. Race/age vs NYC: tables B03002, B01001, ACS 2019–23; NYC = five counties summed. Trends: tables B01003, B19013, per-year 2015–2023, geography SLDU-020. Retrieved 2026-07-14.</div>
+      <div class="cav">Category and bracket choices are ours (White/Black/Asian = alone, non-Hispanic; Hispanic spans all races). Each ACS 5-year point shares four years of surveys with its neighbors, so adjacent points are not independent observations.</div>
+    </details>
+  </section>
+
+  <!-- BACKGROUND ON MEMBER -->
+  <section class="pane c6">
+    <h2>Background on Senator Myrie</h2>
+    <p class="sub" id="memberSub"></p>
+    <div id="memberLinks" style="margin:0 0 6px;font-size:13.5px"></div>
+    <div id="memberCommittees" class="sub" style="margin:0 0 4px"></div>
+    <div id="memberSocial" class="sub" style="margin:0 0 10px"></div>
+    <div id="electionsTbl"></div>
+    <h3 style="font-size:13.5px;margin:14px 0 4px">Signature priorities</h3>
+    <div id="priorities" style="font-size:13.5px"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div id="memberProv"></div>
+    </details>
+  </section>
+
+  <!-- SHARED TURF -->
+  <section class="pane c6">
+    <h2>Who shares this turf</h2>
+    <p class="sub">Districts overlapping SD-20, by share of its area</p>
+    <div id="turfTables"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div>Overlaps computed by geometric intersection of official boundaries (TIGER/NYC OpenData). Member names retrieved 2026-07-14 from <a href="https://council.nyc.gov/districts/" target="_blank">council.nyc.gov</a>, <a href="https://nyassembly.gov/mem/" target="_blank">nyassembly.gov</a>, and GovTrack.</div>
+      <div class="cav">Percentages are shares of SD-20's <b>area, not its population</b>, so a sparsely-populated overlap can look larger than it is. Offices change hands — confirm a name before relying on it.</div>
+    </details>
+  </section>
+
+  <!-- LEGISLATION -->
+  <section class="pane c12">
+    <h2>Legislation</h2>
+    <p class="sub" id="legSub"></p>
+    <div class="chipgroup"><span class="lbl">Role</span><span id="legRoleChips"></span></div>
+    <div class="chipgroup"><span class="lbl">Subject</span><span id="legTopicChips"></span></div>
+    <div class="newslist" id="legList" style="max-height:520px"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary><div id="legProv"></div></details>
+  </section>
+
+  <!-- LOCAL NEWS -->
+  <section class="pane c12">
+    <h2>Local news <span class="fresh" id="newsFresh"></span></h2>
+    <p class="sub" id="newsSub"></p>
+    <div class="chipgroup"><span class="lbl">Topic</span><span id="topicChips"></span></div>
+    <div class="chipgroup"><span class="lbl">Outlet</span><span id="outletChips"></span></div>
+    <div class="newslist" id="newsList"></div>
+    <details class="prov"><summary>How these stories were gathered</summary>
+      <div id="newsProv"></div>
+    </details>
+  </section>
+
+  <!-- RESOURCES -->
+  <section class="pane c12">
+    <h2>Resources</h2>
+    <div style="columns:2;column-gap:28px;font-size:13.5px" id="resources"></div>
+  </section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script>
+const D = window.PORTAL_DATA;
+const SUGGEST_FORM_URL = "https://forms.gle/2DQnYWbxcBWzUVes5";  // Google Form for student suggestions
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const S1 = css('--s1'), S2 = css('--s2'), INK2 = css('--ink2'), GRID = css('--grid'), MUT = css('--muted');
+Chart.defaults.color = INK2; Chart.defaults.borderColor = GRID;
+Chart.defaults.font.family = 'system-ui,-apple-system,"Segoe UI",sans-serif';
+const fmt = n => n==null ? '—' : n.toLocaleString();
+
+// ---- map: district + thematic layer bundles ("pages")
+const PURPLE='#6b4bb0', RED='#b3122b', ORANGE='#e8843a', BLUE='#2a78d6', GREEN='#1baf7a', TEAL='#0e7c86', INK='#111';
+const map = L.map('map', {scrollWheelZoom:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'© OpenStreetMap contributors'}).addTo(map);
+const layer = L.geoJSON(D.boundary, {style:{color:BLUE, weight:3, fillOpacity:.03}}).addTo(map);
+map.fitBounds(layer.getBounds(), {padding:[14,14]});
+const ML = D.maplayers || {};
+
+function precinctLayer(){
+  if(!(ML.precincts && ML.precincts.features.length)) return null;
+  const PAL=['#6b4bb0','#2a78d6','#1baf7a','#e8843a','#b3122b','#d048a0','#3aa0a0','#7a9a2a','#9a5a2a','#5566c9'];
+  ML.precincts.features.forEach((f,i)=>f.properties._color=PAL[i%PAL.length]);
+  return L.geoJSON(ML.precincts,{style:f=>({color:f.properties._color,weight:2,fillColor:f.properties._color,fillOpacity:.28}),
+    onEachFeature:(f,l)=>l.bindTooltip('Precinct '+(f.properties.precinct||'?'),{permanent:true,direction:'center',className:'precinct-lbl'})});
+}
+function dots(pts,colorFn,rFn,popupFn){
+  return L.layerGroup((pts||[]).map(s=>L.circleMarker([s.lat,s.lon],
+    {radius:rFn(s),color:colorFn(s),weight:1,fillColor:colorFn(s),fillOpacity:.6}).bindPopup(popupFn(s))));
+}
+const shootingsLayer = (ML.shootings&&ML.shootings.length) ? dots(ML.shootings,
+  s=>s.murder?RED:ORANGE, s=>s.murder?5:3.5, s=>`Shooting — ${s.date}${s.murder?' (fatal)':''}<br>Precinct ${s.precinct||'?'}`) : null;
+const subwayLayer = (ML.subway&&ML.subway.length) ? dots(ML.subway,
+  ()=>INK, ()=>4.5, s=>`${s.name||'Subway'}<br>${s.routes||''}`) : null;
+const citibikeLayer = (ML.citibike&&ML.citibike.length) ? dots(ML.citibike,
+  ()=>TEAL, ()=>3, s=>`Citi Bike — ${s.name||''}`) : null;
+const busLayer = (ML.bus&&ML.bus.features&&ML.bus.features.length) ?
+  L.geoJSON(ML.bus,{style:{color:GREEN,weight:2.5,opacity:.55}}) : null;
+const evictionsLayer = (ML.evictions&&ML.evictions.length) ? dots(ML.evictions,
+  ()=>'#c0392b', ()=>3.5, s=>`Eviction — ${s.date}<br>${s.addr||''}`) : null;
+
+const n = a => (a&&a.length)||0;
+const THEMES = {
+  'District': {layers:[], legend:'2022 district lines. Pick a theme above to overlay data.'},
+  'Criminal justice': {layers:[precinctLayer(), shootingsLayer].filter(Boolean),
+    legend:`Precincts shaded &amp; numbered · shootings 2021–: <b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal (${n(ML.shootings)} geocoded incidents)`},
+  'Transit': {layers:[busLayer, subwayLayer, citibikeLayer].filter(Boolean),
+    legend:`Subway stations <b style="color:${INK}">●</b> · bus routes <b style="color:${GREEN}">—</b> · Citi Bike docks <b style="color:${TEAL}">●</b>`},
+  'Housing': {layers:[evictionsLayer].filter(Boolean),
+    legend:`Each dot is a residential eviction executed since 2023 <b style="color:#c0392b">●</b> (${n(ML.evictions)} in the district)`},
+};
+const themeNames = Object.keys(THEMES);
+let shownLayers = [];
+const themeEl=document.getElementById('mapThemes'), legEl=document.getElementById('mapLegend');
+function setTheme(name){
+  shownLayers.forEach(l=>map.removeLayer(l)); shownLayers=[];
+  THEMES[name].layers.forEach(l=>{ l.addTo(map); shownLayers.push(l); });
+  legEl.innerHTML = THEMES[name].legend;
+  themeEl.innerHTML = themeNames.map(t=>`<span class="chip ${t===name?'on':''}" data-t="${t}">${t}</span>`).join('');
+  themeEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>setTheme(el.dataset.t));
+}
+setTheme('District');
+{
+  const p = D.boundary._prov, ml = (D.maplayers && D.maplayers._prov) || {sources:{}};
+  const ss = (D.maplayers && D.maplayers.shootings_stats) || {};
+  document.getElementById('mapProv').innerHTML =
+    `District lines: <a href="${p.url}" target="_blank">${p.source}</a>, retrieved ${p.retrieved}. ` +
+    `Precincts: ${ml.sources.precincts||'NYC Open Data'}. Shootings: ${ml.sources.shootings||'NYC Open Data'}. ` +
+    `Basemap © OpenStreetMap contributors.` +
+    `<div class="cav">${ml.caveats||''}` +
+    (ss.brooklyn_missing_coords!=null ? ` ${ss.in_district} shootings fall inside the district; ${ss.brooklyn_missing_coords} Brooklyn records since 2021 lacked coordinates and are not shown.` : '') +
+    ` The lines were redrawn in 2022 — comparisons over time must account for it (see the Census charts).</div>`;
+}
+
+// ---- headline tiles: label first, with citywide comparison
+const h = D.headline.stats, city = D.headline.city;
+const cmp = (val, unit) => city ? `vs ${unit==='$'?'$':''}${fmt(val)}${unit==='%'?'%':''} citywide` : '';
+const tiles = [
+  ['Population', fmt(h.population), ''],
+  ['Median household income', '$'+fmt(h.median_hh_income), city ? `vs $${fmt(city.median_hh_income)} citywide` : ''],
+  ['Share foreign-born', h.pct_foreign_born+'%', city ? `vs ${city.pct_foreign_born}% citywide` : ''],
+  ['Median age', h.median_age, city ? `vs ${city.median_age} citywide` : ''],
+];
+document.getElementById('stats').innerHTML = tiles.map(([l,v,c]) =>
+  `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${c?`<div class="cmp">${c}</div>`:''}</div>`).join('');
+
+// ---- table helper
+function tbl(el, head, rows){
+  document.getElementById(el).innerHTML = '<table><tr>' + head.map(x=>`<th>${x}</th>`).join('') +
+    '</tr>' + rows.map(r=>'<tr>'+r.map((c,i)=>`<td class="${i? 'num':''}">${c}</td>`).join('')+'</tr>').join('') + '</table>';
+}
+
+// ---- race + age grouped bars (y starts at 0)
+function grouped(id, labels, a, b, unit){
+  new Chart(document.getElementById(id), {type:'bar',
+    data:{labels, datasets:[
+      {label:'SD-20', data:a, backgroundColor:S1, borderRadius:4, categoryPercentage:.72, barPercentage:.9},
+      {label:'NYC',   data:b, backgroundColor:S2, borderRadius:4, categoryPercentage:.72, barPercentage:.9}]},
+    options:{plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}${unit}`}}},
+      scales:{y:{beginAtZero:true, grid:{color:GRID}, ticks:{callback:v=>v+unit}}, x:{grid:{display:false}}}}});
+}
+if (D.people.race){
+  grouped('raceChart', D.people.race.labels, D.people.race.sd20_pct, D.people.race.nyc_pct, '%');
+  tbl('raceTbl', ['Group','SD-20','NYC'], D.people.race.labels.map((l,i)=>
+    [l, D.people.race.sd20_pct[i]+'%', D.people.race.nyc_pct[i]+'%']));
+}
+if (D.people.age){
+  grouped('ageChart', D.people.age.groups,
+    D.people.age.sd20_pct.map(v=>+v.toFixed(1)), D.people.age.nyc_pct.map(v=>+v.toFixed(1)), '%');
+  tbl('ageTbl', ['Ages','SD-20','NYC'], D.people.age.groups.map((g,i)=>
+    [g, D.people.age.sd20_pct[i].toFixed(1)+'%', D.people.age.nyc_pct[i].toFixed(1)+'%']));
+}
+
+// ---- trends with the 2022 boundary break (y starts at 0)
+function trend(id, series, fmtV){
+  const yrs = D.trends.years, brk = yrs.indexOf(D.trends.boundary_break_year);
+  new Chart(document.getElementById(id), {type:'line',
+    data:{labels:yrs, datasets:[{label:'SD-20', data:series, borderColor:S1, borderWidth:2,
+      pointRadius:4, pointBackgroundColor:S1, spanGaps:false,
+      segment:{borderDash: c => (c.p1DataIndex === brk) ? [5,4] : undefined}}]},
+    options:{plugins:{legend:{display:false}, tooltip:{callbacks:{
+        label:c=>` ${fmtV(c.parsed.y)}${c.dataIndex>=brk ? '  (post-2022 lines)' : '  (pre-2022 lines)'}`}}},
+      scales:{y:{beginAtZero:true, grid:{color:GRID}, ticks:{callback:fmtV}}, x:{grid:{display:false}}}}});
+}
+trend('popChart', D.trends.population, v=>v.toLocaleString());
+trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
+
+// ---- member background
+{
+  const m = D.member;
+  document.getElementById('memberSub').textContent = m.office;
+  const link = (u,t) => `<a href="${u}" target="_blank">${t}</a>`;
+  document.getElementById('memberLinks').innerHTML =
+    [link(m.wikipedia,'Wikipedia'), link(m.senate_page,'NY Senate page'),
+     m.legislation_url ? link(m.legislation_url,'Sponsored bills') : ''].filter(Boolean).join(' · ');
+  if (m.committees)
+    document.getElementById('memberCommittees').innerHTML = '<b>Committees:</b> ' + m.committees.join(', ');
+  if (m.social){
+    const off = m.social.official.map(s=>link(s.url,s.platform)).join(' · ');
+    const oth = (m.social.other||[]).map(s=>link(s.url,s.platform)).join(' · ');
+    document.getElementById('memberSocial').innerHTML =
+      '<b>Official accounts:</b> ' + off + (oth ? ` &nbsp;·&nbsp; also ${oth}` : '');
+  }
+  const erows = m.elections.map(e=>{
+    const opp = e.opp_votes!=null ? `${e.opp} — ${fmt(e.opp_votes)} (${e.opp_pct}%)` : e.opp;
+    return `<tr><td>${e.year}</td><td>${e.race}</td><td>${fmt(e.self)} (${e.self_pct}%)</td>` +
+           `<td>${e.result}</td></tr>`;
+  }).join('');
+  document.getElementById('electionsTbl').innerHTML =
+    '<table><tr><th>Year</th><th>Race</th><th>Myrie</th><th>Result</th></tr>' + erows + '</table>' +
+    '<details class="tbl"><summary>Opponents &amp; notes</summary>' +
+    m.elections.map(e=>`<div>${e.year} ${e.race}: ${e.opp_votes!=null?`${e.opp} — ${fmt(e.opp_votes)} (${e.opp_pct}%)`:e.opp}${e.note?' — '+e.note:''}</div>`).join('') +
+    '</details>';
+  document.getElementById('priorities').innerHTML = m.priorities.map(([area,desc,url])=>
+    `<p style="margin:0 0 7px"><b>${area}.</b> ${desc} <a href="${url}" target="_blank">source</a></p>`).join('');
+  const mp = m._prov;
+  document.getElementById('memberProv').innerHTML =
+    `Source: ${mp.source} (<a href="${mp.url}" target="_blank">district results</a>), retrieved ${mp.retrieved}. ${mp.method}` +
+    `<div class="cav">${mp.caveats}</div>`;
+}
+
+// ---- legislation (filter by role + subject)
+{
+  const L = D.legislation;
+  if (L && L.bills && L.bills.length){
+    const bills = L.bills, byRole = {};
+    bills.forEach(b=>byRole[b.role]=(byRole[b.role]||0)+1);
+    const roles = ['Prime sponsor','Co-sponsor'].filter(r=>byRole[r]);
+    const prime = bills.filter(b=>b.role==='Prime sponsor');
+    const signed = prime.filter(b=>/sign|chapter/i.test(b.status)).length;
+    const inCmte = prime.filter(b=>/committee/i.test(b.status)).length;
+    document.getElementById('legSub').innerHTML =
+      `<b>${fmt(L.n_leads)}</b> bills introduced as <b>prime sponsor</b> and <b>${fmt(L.n_cosponsor)}</b> co-sponsored this session (${L.session}). ` +
+      `Introducing a bill is routine in Albany: of the ${L.n_leads} he leads, <b>${signed}</b> are signed into law and <b>${inCmte}</b> still sit in committee. Date shown is the introduction date.`;
+    const roleEl=document.getElementById('legRoleChips'), topicEl=document.getElementById('legTopicChips'),
+          listEl=document.getElementById('legList');
+    let fRole='Prime sponsor', fTopic='All';
+    const esc=s=>s.replace(/"/g,'&quot;');
+    const chip=(label,n,active,kind)=>`<span class="chip ${active?'on':''}" data-k="${kind}" data-v="${esc(label)}">${label}${n!=null?` (${n})`:''}</span>`;
+    function render(){
+      roleEl.innerHTML = chip('All', bills.length, fRole==='All','r') + roles.map(r=>chip(r, byRole[r], fRole===r,'r')).join('');
+      const scope = fRole==='All' ? bills : bills.filter(b=>b.role===fRole);
+      const tc={}; scope.forEach(b=>tc[b.topic]=(tc[b.topic]||0)+1);
+      const tks=Object.keys(tc).sort((x,y)=>tc[y]-tc[x]);
+      topicEl.innerHTML = chip('All', scope.length, fTopic==='All','t') + tks.map(t=>chip(t, tc[t], fTopic===t,'t')).join('');
+      [roleEl,topicEl].forEach(g=>g.querySelectorAll('.chip[data-k]').forEach(el=>el.onclick=()=>{
+        if(el.dataset.k==='r'){fRole=el.dataset.v; fTopic='All';} else fTopic=el.dataset.v; render();
+      }));
+      let shown = scope;
+      if(fTopic!=='All') shown = shown.filter(b=>b.topic===fTopic);
+      listEl.innerHTML = shown.map(b=>
+        `<div class="art">${b.introduced||'—'} <b><a href="${b.url}" target="_blank">${b.printNo}</a></b> — ${b.title} ` +
+        `<span class="meta">${b.role} · ${b.status}</span></div>`).join('') || '<p class="sub">No bills match this filter.</p>';
+    }
+    render();
+    const lp=L._prov;
+    document.getElementById('legProv').innerHTML =
+      `Source: <a href="${lp.url}" target="_blank">${lp.source}</a>, retrieved ${lp.retrieved}. ${lp.method}<div class="cav">${lp.caveats}</div>`;
+  } else {
+    document.getElementById('legSub').textContent = 'Legislation feed unavailable — see the Sponsored bills link above.';
+  }
+}
+
+// ---- turf tables
+const T = D.turf, tt = document.getElementById('turfTables');
+[['congress','U.S. House'],['assembly','NY Assembly'],['council','NYC Council']].forEach(([k,label])=>{
+  const rows = T[k]; if (!rows) return;
+  tt.innerHTML += `<h3 style="font-size:13px;margin:10px 0 2px;color:var(--ink2)">${label}</h3>` +
+    '<table><tr><th>District</th><th>Member</th><th style="text-align:right">% of SD-20 area</th></tr>' +
+    rows.map(r=>`<tr><td>${r.district}</td><td><a href="${r.link}" target="_blank">${r.member||'look up →'}</a></td>` +
+      `<td class="num">${r.pct_of_sd20}%</td></tr>`).join('') + '</table>';
+});
+
+// ---- local news: reverse-chron list, filter by topic AND outlet
+{
+  const arts = D.news.articles || [];
+  const byTopic = {}, byOutlet = {};
+  arts.forEach(a => { byTopic[a.topic]=(byTopic[a.topic]||0)+1; byOutlet[a.outlet]=(byOutlet[a.outlet]||0)+1; });
+  const topics = Object.keys(byTopic).sort((x,y)=>byTopic[y]-byTopic[x]);
+  const outletsAll = Object.keys(byOutlet).sort((x,y)=>byOutlet[y]-byOutlet[x]);
+  const TOPN = 15, outlets = outletsAll.slice(0, TOPN);
+
+  // freshness badge
+  const stamp = D.news.retrieved || '';
+  const dt = new Date(stamp.replace(' ','T'));
+  const ageH = (Date.now() - dt.getTime()) / 3.6e6;
+  document.getElementById('newsFresh').textContent =
+    (isFinite(ageH) && ageH <= 24) ? 'scraped in the last 24 h' : 'scraped ' + stamp.slice(0,10);
+  document.getElementById('newsSub').textContent =
+    `${fmt(D.news.total)} stories from the last 6 months, refreshed daily; showing the ${fmt(arts.length)} most recent across ${outletsAll.length} outlets.`;
+
+  const topicEl = document.getElementById('topicChips'), outletEl = document.getElementById('outletChips'),
+        listEl = document.getElementById('newsList');
+  let fTopic = 'All', fOutlet = 'All';
+  const esc = s => s.replace(/"/g,'&quot;');
+  const chip = (label, n, active, kind) =>
+    `<span class="chip ${active?'on':''}" data-k="${kind}" data-v="${esc(label)}">${label}${n!=null?` (${n})`:''}</span>`;
+  function render(){
+    topicEl.innerHTML = chip('All', arts.length, fTopic==='All','t') +
+      topics.map(t=>chip(t, byTopic[t], fTopic===t,'t')).join('');
+    outletEl.innerHTML = chip('All', null, fOutlet==='All','o') +
+      outlets.map(o=>chip(o, byOutlet[o], fOutlet===o,'o')).join('') +
+      (outletsAll.length>TOPN ? `<span class="chip" style="cursor:default;opacity:.55">+${outletsAll.length-TOPN} more</span>` : '');
+    [topicEl,outletEl].forEach(g=>g.querySelectorAll('.chip[data-k]').forEach(el=>el.onclick=()=>{
+      if(el.dataset.k==='t') fTopic=el.dataset.v; else fOutlet=el.dataset.v; render();
+    }));
+    let shown = arts;
+    if (fTopic!=='All')  shown = shown.filter(a=>a.topic===fTopic);
+    if (fOutlet!=='All') shown = shown.filter(a=>a.outlet===fOutlet);
+    listEl.innerHTML = shown.map(a=>{
+      const date = a.date_display.split(',')[0];
+      return `<div class="art">${date} (<i>${a.outlet}</i>) ` +
+        `<b><a href="${a.link}" target="_blank">“${a.title}”</a></b></div>`;
+    }).join('') || '<p class="sub">No stories match this filter.</p>';
+  }
+  render();
+
+  const np = D.news._prov;
+  document.getElementById('newsProv').innerHTML =
+    `${np.method} ${np.source}. Queries: ${D.news.queries.map(q=>q.replace(/"/g,'')).join('; ')}.` +
+    `<div class="cav">${np.caveats} Outlet buttons show the 15 most-represented sources; ${outletsAll.length} appear in all.</div>`;
+}
+
+// ---- suggestion form button (set SUGGEST_FORM_URL once the Google Form exists)
+{
+  const sb = document.getElementById('suggestBtn');
+  if (SUGGEST_FORM_URL) { sb.href = SUGGEST_FORM_URL; }
+  else { sb.href='#'; sb.textContent='Suggest a change or addition (form link coming)'; sb.style.opacity=.6;
+         sb.onclick = e => e.preventDefault(); }
+}
+
+// ---- resources
+const RES = [
+  ['NYC Open Data', 'https://opendata.cityofnewyork.us/', 'the city\'s raw feeds — 311, NYPD complaints, HPD violations, DOB permits. Filter to the district yourself.'],
+  ['Census Reporter — SD-20', 'https://censusreporter.org/profiles/61000US36020-state-senate-district-20-ny/', 'ACS data for this exact geography, with margins of error shown.'],
+  ['NY Senate — bill &amp; vote search', 'https://www.nysenate.gov/legislation', 'what Myrie has sponsored and how he voted.'],
+  ['NYC Council Legistar', 'https://legistar.council.nyc.gov/', 'hearings, testimony, and local laws.'],
+  ['NYS BOE enrollment reports', 'https://elections.ny.gov/enrollment-state-senate-district', 'party registration by senate district, published twice a year.'],
+  ['vote.nyc certified results', 'https://vote.nyc/page/election-results-summary', 'the official recaps behind any turnout claim.'],
+  ['NYC Council Data Team', 'https://council.nyc.gov/data/', 'demographic profiles modeled to council-district lines.'],
+  ['Furman Center', 'https://furmancenter.org/neighborhoods', 'housing and neighborhood data with methodology notes.'],
+  ['NYU Libraries — Databases A–Z', 'https://library.nyu.edu/', 'PAIS Index and Policy Commons for policy literature.'],
+  ['Google Scholar (via NYU)', 'https://scholar.google.com/', 'set Library Links to NYU so paywalled papers resolve.'],
+];
+document.getElementById('resources').innerHTML = RES.map(([n,u,why])=>
+  `<p style="margin:0 0 9px;break-inside:avoid"><a href="${u}" target="_blank"><b>${n}</b></a> — ${why}</p>`).join('');
+
+// ---- footer (provenance only)
+document.getElementById('foot').innerHTML =
+  `Built with AI assistance and human-verified sources · data pipeline: build/build_portal.py · ` +
+  `prompts: <a href="prompt.txt" target="_blank">prompt.txt</a> · NYU Senior Seminar, Fall 2026 pilot.`;
+</script>
+</body>
+</html>
