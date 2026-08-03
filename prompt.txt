@@ -20,16 +20,49 @@ WHAT THE PAGE CONTAINS
    each shown against the citywide figure. Source: ACS 5-year (2020-24).
 3. Census detail — race/ethnicity and age vs. NYC; population and median income over time,
    with the 2022 redistricting break marked. Source: ACS 5-year via the Census API.
-4. Background on the member — Wikipedia, election history with vote totals, signature priorities.
-5. Local news — last 6 months across local outlets, deduplicated, tagged by topic, filterable.
-6. Resources — primary-source portals for going deeper.
+4. Community districts — the NYC community boards that overlap the legislative district, each
+   with its self-identified needs and links to the source. Also a map theme: the community-district
+   boundaries overlaid on the district, each clickable to jump to its card below.
+5. Background on the member — Wikipedia, election history with vote totals, signature priorities.
+6. Local news — last 6 months across local outlets, deduplicated, tagged by topic, filterable.
+7. Resources — primary-source portals for going deeper.
 
 HOW IT'S BUILT
 A single Python script (build/build_portal.py) fetches each source, writes one JSON file per
 pane (each with a provenance block), and bakes them into data/portal_data.js so the page runs
 from a static file or GitHub Pages. index.html is presentation only.
 
+COLLECTING COMMUNITY-DISTRICT NEEDS (reproducible from public sources — no private email needed)
+Everything below is public; an agent can assemble it from web search and open data alone.
+1. Find which community districts overlap the legislative district. Boundaries: NYC Open Data
+   "Community Districts" (dataset 5crt-au7u, GeoJSON export); field boro_cd = borough digit + CD
+   number (Brooklyn = 3xx). Intersect with the legislative-district polygon; keep the CDs that
+   overlap. Simplify and bake to data/community_districts.js as window.CD_GEO (property cd).
+2. For each community district, pull its NYC Dept. of City Planning Community Profile:
+   communityprofiles.planning.nyc.gov/<borough>/<N> — standardized demographics and indicators.
+3. Find that board's "Statement of Community District Needs" for the latest fiscal year. It is a
+   public PDF. Search e.g.  "Community Board <N>" Brooklyn "Statement of Community District Needs"
+   FY2027 filetype:pdf  — or the board's official site (cb<N>brooklyn.* / nyc.gov/site/brooklyncb<N>).
+   The consolidated set is also published centrally by NYC OMB (the annual "Community District
+   Needs" / register of community-board budget requests). Prefer the board's own current-year PDF.
+4. From each statement, extract the board's TOP THREE PRESSING ISSUES plus its highest-ranked
+   capital/expense requests. Distill each to a short phrase; do not reproduce the whole document.
+   Read past a board that reframes the form — pull its substantive priorities anyway (e.g. CB14's
+   park-access and housing-condition needs sit beneath a governance critique).
+5. Provenance and honesty: each card links the community profile + the statement PDF and names the
+   fiscal year. If a board has not posted a current statement, say so and link the board instead —
+   never guess its priorities. Flag an older-year statement as such.
+This static, human-checked content is embedded in index.html (const CDS) rather than fetched live,
+since it changes about once a year, not daily.
+
 REVISION LOG (prune as it grows — keep it short)
+- 2026-08-03  Added a Community districts pane: a card per overlapping community board with its
+              self-identified needs (from each board's Statement of Community District Needs) and
+              source links; missing/older statements flagged, not guessed. Added a "Community
+              districts" map theme (CB boundaries, dataset 5crt-au7u) with click-to-jump to each
+              card. Documented the public web-search method for collecting the CB documents (above),
+              so the class can rebuild it without private email. News dates switched to MM/DD/YYYY.
+              Styled missing-data disclosures distinctly from highlighted stats (no yellow fill).
 - 2026-07-15  First pilot reviewed. Reframed the banner; led the stat tiles with labels and
               citywide comparisons; grouped the Census panes under one source; added citywide
               comparisons, the previous district lines, member background with elections, and a
