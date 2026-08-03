@@ -183,8 +183,9 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
   <!-- COMMUNITY DISTRICTS -->
   <section class="pane c12">
     <h2>Community districts</h2>
-    <p class="sub">SD-20 spans eight community districts. Each community board files an annual Statement of
-    Community District Needs; its own ranked priorities are summarized below.</p>
+    <p class="sub">SD-20 spans eight community districts, ordered here by how much of each board falls inside
+    the district. Each files an annual Statement of Community District Needs; its own ranked priorities are
+    summarized below.</p>
     <div class="cdgrid" id="cdGrid"></div>
     <details class="prov"><summary>Source &amp; caveats</summary>
       <div>Neighborhoods, boards, and priorities from each board's <b>Statement of Community District
@@ -526,9 +527,11 @@ const T = D.turf, tt = document.getElementById('turfTables');
       note:'Highest foreclosure rate in Brooklyn (10.5 per 1,000 small homes).',
       stmt:['https://cbbrooklyn.cityofnewyork.us/cb17/wp-content/uploads/sites/6/2026/01/FY2027_Statement_BK17.pdf','Statement of needs (FY2027)']},
   ];
+  const CD_SHARE = {9:100,8:83.7,17:18.8,7:17.1,6:16.9,3:6.5,14:5.4,12:2.9}; // % of each CB inside SD-20 (projected, EPSG:2263)
+  CDS.sort((a,b)=>CD_SHARE[b.cd]-CD_SHARE[a.cd]);
   document.getElementById('cdGrid').innerHTML = CDS.map(c=>
     `<div class="cdcard" id="cd-${c.cd}"><h3>CB${c.cd} · ${c.hoods}</h3>` +
-    `<div class="cbline">${c.cb} · ${c.pr}</div>` +
+    `<div class="cbline">${c.cb} · ${c.pr} · ${Math.round(CD_SHARE[c.cd])}% in district</div>` +
     `<ul>${c.needs.map(x=>`<li>${x}</li>`).join('')}</ul>` +
     (c.note?`<div class="stat">${c.note}</div>`:'') +
     (c.flag?`<div class="missing">${c.flag}</div>`:'') +
