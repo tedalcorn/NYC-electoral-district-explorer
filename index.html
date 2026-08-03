@@ -82,6 +82,17 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
 .precinct-lbl{background:transparent;border:0;box-shadow:none;color:var(--ink);font-weight:700;font-size:12px;
   text-shadow:0 0 3px var(--surface),0 0 3px var(--surface),0 0 3px var(--surface)}
 .precinct-lbl::before{display:none}
+.cdgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:12px}
+.cdcard{border:1px solid var(--border);border-radius:9px;padding:11px 13px;background:var(--surface);
+  display:flex;flex-direction:column}
+.cdcard h3{margin:0 0 1px;font-size:14px}
+.cdcard .cbline{color:var(--muted);font-size:12px;margin:0 0 8px}
+.cdcard ul{margin:0 0 9px;padding-left:16px;font-size:13px}
+.cdcard li{margin:0 0 3px}
+.cdcard .flag{font-size:11.5px;color:var(--ink2);background:var(--warn-bg);border-radius:5px;
+  padding:4px 7px;margin:0 0 9px}
+.cdcard .lk{margin-top:auto;font-size:12.5px;border-top:1px solid var(--grid);padding-top:8px}
+.cdcard .lk a{margin-right:12px}
 </style>
 </head>
 <body>
@@ -160,6 +171,23 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
     <details class="prov"><summary>Source &amp; caveats</summary>
       <div>Source: U.S. Census Bureau, ACS 5-year estimates via the <a href="https://www.census.gov/data/developers/data-sets/acs-5year.html" target="_blank">Census API</a>. Race/age vs NYC: tables B03002, B01001, ACS 2019–23; NYC = five counties summed. Trends: tables B01003, B19013, per-year 2015–2023, geography SLDU-020. Retrieved 2026-07-14.</div>
       <div class="cav">Category and bracket choices are ours (White/Black/Asian = alone, non-Hispanic; Hispanic spans all races). Each ACS 5-year point shares four years of surveys with its neighbors, so adjacent points are not independent observations.</div>
+    </details>
+  </section>
+
+  <!-- COMMUNITY DISTRICTS -->
+  <section class="pane c12">
+    <h2>Community districts</h2>
+    <p class="sub">SD-20 spans eight community districts. Each community board files an annual Statement of
+    Community District Needs; its own ranked priorities are summarized below.</p>
+    <div class="cdgrid" id="cdGrid"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary>
+      <div>Neighborhoods, boards, and priorities from each board's <b>Statement of Community District
+      Needs</b> (FY2027 where posted) and the NYC Department of City Planning
+      <a href="https://communityprofiles.planning.nyc.gov/" target="_blank">Community Profiles</a>.
+      Compiled with the office of Sen. Myrie, retrieved 2026-08-03.</div>
+      <div class="cav">Priorities are each board's own framing, distilled — see the linked statement for
+      the full list. CB6 and CB7 have not posted a public FY2027 statement (the link goes to the board);
+      CB9's posted statement is FY2025.</div>
     </details>
   </section>
 
@@ -432,6 +460,54 @@ const T = D.turf, tt = document.getElementById('turfTables');
     rows.map(r=>`<tr><td>${r.district}</td><td><a href="${r.link}" target="_blank">${r.member||'look up →'}</a></td>` +
       `<td class="num">${r.pct_of_sd20}%</td></tr>`).join('') + '</table>';
 });
+
+// ---- community districts (curated from each board's Statement of Community District Needs)
+{
+  const p = n => `https://communityprofiles.planning.nyc.gov/brooklyn/${n}`;
+  const CDS = [
+    {cd:3, hoods:'Bedford-Stuyvesant', cb:'Community Board 3', pr:'Precincts 79, 81',
+      needs:['Affordable housing','Parks &amp; open space','Trash removal &amp; cleanliness',
+             'Stormwater fixes on the Marcy/Patchen/Howard flood corridors'],
+      note:'Among the worst open-space deficits in the city; 55% of renters are rent-burdened.',
+      stmt:['https://www.nyc.gov/site/brooklyncb3/index.page','Community Board 3 ↗']},
+    {cd:6, hoods:'Park Slope · Carroll Gardens · Gowanus · Red Hook', cb:'Community Board 6', pr:'Precinct 78',
+      needs:['Access to social services','Climate &amp; flood infrastructure','Transportation','Housing preservation'],
+      flag:'No public FY2027 statement posted — priorities from the office summary.',
+      stmt:['https://brooklyncb6.cityofnewyork.us/','Community Board 6 ↗']},
+    {cd:7, hoods:'Sunset Park · Windsor Terrace', cb:'Community Board 7', pr:'Precinct 72',
+      needs:['Affordable housing','Traffic volume','Neighborhood cleanliness'],
+      flag:'No public FY2027 statement posted — priorities from the office summary.',
+      stmt:['https://cbbrooklyn.cityofnewyork.us/cb7/','Community Board 7 ↗']},
+    {cd:8, hoods:'Crown Heights · Prospect Heights · Weeksville', cb:'Community Board 8', pr:'Precincts 77, 78',
+      needs:['Affordable housing','Senior services','Crime &amp; public safety','Reconstruct St. Johns Place'],
+      note:'Two decades of gentrification and displacement pressure.',
+      stmt:['https://www.brooklyncb8.org/docs/FY2027_Statement_BK08.pdf','Statement of needs (FY2027)']},
+    {cd:9, hoods:'Crown Heights · Prospect-Lefferts Gardens · Wingate · North Flatbush', cb:'Community Board 9', pr:'Precinct 71',
+      needs:['Affordable housing','Infrastructure resiliency','Trash removal &amp; cleanliness'],
+      note:'New construction skews middle-income, missing current residents.',
+      stmt:['https://www.nyc.gov/assets/brooklyncb9/downloads/pdf/2024/FY2025_Statement_BK09.pdf','Statement of needs (FY2025)']},
+    {cd:12, hoods:'Borough Park · Sunset Park', cb:'Community Board 12', pr:'Precinct 66',
+      needs:['Traffic congestion &amp; parking','Trash removal &amp; cleanliness','Affordable housing','Reconstruct 37th St (14th–15th Ave)'],
+      note:'Private schools — most of local enrollment — get no daily trash pickup.',
+      stmt:['https://www.nyc.gov/site/brooklyncb12/index.page','Community Board 12 ↗']},
+    {cd:14, hoods:'Flatbush · Midwood', cb:'Community Board 14', pr:'Precinct 70',
+      needs:['City agencies lack capacity and don’t coordinate','Community boards are structurally under-resourced','Local land-use consultation has collapsed','New parks and playground reconstruction'],
+      note:'Filed a governance-reform statement rather than a standard project list.',
+      stmt:['https://cb14brooklyn.com/wp-content/uploads/2025/12/FY2027_Statement-of-Community-District-Needs-and-CB-Requests_BK14.pdf','Statement of needs (FY2027)']},
+    {cd:17, hoods:'East Flatbush', cb:'Community Board 17', pr:'Precinct 67',
+      needs:['Affordable housing','Health care services','Roadway maintenance','Air-quality monitoring &amp; solar hubs'],
+      note:'Highest foreclosure rate in Brooklyn (10.5 per 1,000 small homes).',
+      stmt:['https://cbbrooklyn.cityofnewyork.us/cb17/wp-content/uploads/sites/6/2026/01/FY2027_Statement_BK17.pdf','Statement of needs (FY2027)']},
+  ];
+  document.getElementById('cdGrid').innerHTML = CDS.map(c=>
+    `<div class="cdcard"><h3>CB${c.cd} · ${c.hoods}</h3>` +
+    `<div class="cbline">${c.cb} · ${c.pr}</div>` +
+    `<ul>${c.needs.map(x=>`<li>${x}</li>`).join('')}</ul>` +
+    (c.note?`<div class="flag">${c.note}</div>`:'') +
+    (c.flag?`<div class="flag">${c.flag}</div>`:'') +
+    `<div class="lk"><a href="${p(c.cd)}" target="_blank">Community profile</a>` +
+    `<a href="${c.stmt[0]}" target="_blank">${c.stmt[1]}</a></div></div>`).join('');
+}
 
 // ---- local news: reverse-chron list, filter by topic AND outlet
 {
