@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="data/portal_data.js"></script>
 <script src="data/community_districts.js"></script>
+<script src="data/acs_static.js"></script>
 <style>
 :root{
   --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
@@ -49,6 +50,13 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
   font:700 11px/17px Helvetica,Arial,sans-serif;color:#fff;margin:0 1px;vertical-align:middle}
 .bullet.dk{color:#000}
 .bus-lbl{background:var(--surface);border:1px solid var(--border);color:var(--ink);font-weight:600;font-size:11.5px;padding:1px 5px}
+.map-muted .leaflet-tile-pane{filter:grayscale(1) contrast(.8) brightness(1.12);opacity:.55}
+.swatch{display:inline-block;width:22px;height:11px;vertical-align:middle;margin:0 3px 0 9px;border:1px solid var(--border)}
+.dotkey{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin:0 3px 0 9px;border:1px solid #222}
+#measureChips{margin:6px 0 0}
+.bars{display:grid;grid-template-columns:max-content 1fr max-content;gap:5px 10px;align-items:center;font-size:13px}
+.bars .bar{height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
+.bars .val{color:var(--ink2);font-variant-numeric:tabular-nums;font-size:12.5px}
 .newsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:0 26px;max-height:640px;
   overflow-y:auto;align-items:start;padding-right:6px}
 .story{padding:10px 0 11px;border-top:1px solid var(--grid)}
@@ -145,6 +153,7 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
     <p class="sub">Central Brooklyn — pick a theme to overlay data</p>
     <div class="chipgroup" id="mapThemes"></div>
     <div id="map"></div>
+    <div class="chipgroup" id="measureChips" hidden></div>
     <div class="maplegend" id="mapLegend"></div>
     <details class="prov"><summary>Source &amp; caveats</summary>
       <div id="mapProv"></div>
@@ -196,6 +205,20 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
       <div>Source: U.S. Census Bureau, ACS 5-year estimates via the <a href="https://www.census.gov/data/developers/data-sets/acs-5year.html" target="_blank">Census API</a>. Race/age vs NYC: tables B03002, B01001, ACS 2019–23; NYC = five counties summed. Trends: tables B01003, B19013, per-year 2015–2023, geography SLDU-020. Retrieved 2026-07-14.</div>
       <div class="cav">Category and bracket choices are ours (White/Black/Asian = alone, non-Hispanic; Hispanic spans all races). Each ACS 5-year point shares four years of surveys with its neighbors, so adjacent points are not independent observations.</div>
     </details>
+  </section>
+
+  <!-- ORIGINS + LANGUAGE -->
+  <section class="pane c6" id="originsPane">
+    <h2>Where foreign-born residents were born</h2>
+    <p class="sub" id="originsSub"></p>
+    <div class="bars" id="originsBars"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary><div id="originsProv"></div></details>
+  </section>
+  <section class="pane c6" id="langPane">
+    <h2>Languages spoken at home</h2>
+    <p class="sub" id="langSub"></p>
+    <div class="bars" id="langBars"></div>
+    <details class="prov"><summary>Source &amp; caveats</summary><div id="langProv"></div></details>
   </section>
 
   <!-- COMMUNITY DISTRICTS -->
@@ -285,8 +308,9 @@ const fmt = n => n==null ? '—' : n.toLocaleString();
 // ---- map: district + thematic layer bundles ("pages")
 const PURPLE='#6b4bb0', RED='#b3122b', ORANGE='#e8843a', BLUE='#2a78d6', GREEN='#1baf7a', TEAL='#0e7c86', INK='#111';
 const map = L.map('map', {scrollWheelZoom:false});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+const baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   {attribution:'© OpenStreetMap contributors'}).addTo(map);
+// for the shaded (choropleth) theme the basemap is grayed out in CSS (.map-muted), so the shading is the only color
 const layer = L.geoJSON(D.boundary, {style:{color:BLUE, weight:3, fillOpacity:.03}}).addTo(map);
 map.fitBounds(layer.getBounds(), {padding:[14,14]});
 const ML = D.maplayers || {};
@@ -336,6 +360,54 @@ const busLayer = (ML.bus&&ML.bus.features&&ML.bus.features.length) ?
 const evictionsLayer = (ML.evictions&&ML.evictions.length) ? dots(ML.evictions,
   ()=>'#c0392b', ()=>3.5, s=>`Eviction — ${mdY(s.date)}<br>${s.addr||''}`) : null;
 
+// schools / early education / after-school: three hues; school sector shown by fill (solid, ringed, hollow)
+const EDU_COLOR = {school:BLUE, early:ORANGE, after:GREEN};
+const educationLayer = (ML.education&&ML.education.length) ? L.layerGroup(ML.education.map(p=>{
+  const c=EDU_COLOR[p.cat], hollow=p.kind==='Non-public school', ring=p.kind==='Charter school';
+  return L.circleMarker([p.lat,p.lon],{radius:p.cat==='school'?5.5:4, color:ring?'#111':c, weight:hollow?2.2:ring?1.8:1,
+    fillColor:hollow?'#fff':c, fillOpacity:hollow?.9:.8})
+    .bindPopup(`<b>${p.name}</b><br>${p.kind}${p.type&&p.type.toLowerCase()!==p.kind.toLowerCase()?' · '+p.type:''}` +
+      `${p.operator?'<br>Run by: '+p.operator:''}${p.capacity?'<br>Capacity: '+fmt(p.capacity):''}<br>${p.addr}`);})) : null;
+
+// food retail: one hue, dot size = floor area on the state license
+const FOOD_R = {large:8, medium:5, small:3, unknown:3};
+const foodLayer = (ML.food&&ML.food.length) ? L.layerGroup(ML.food.slice().sort((a,b)=>FOOD_R[a.size]-FOOD_R[b.size]).map(p=>
+  L.circleMarker([p.lat,p.lon],{radius:p.other?3:FOOD_R[p.size], color:p.other||p.size==='unknown'?'#777':'#0d366b', weight:1,
+    fillColor:p.other||p.size==='unknown'?'#fff':(p.size==='large'?'#1c5cab':p.size==='medium'?'#3987e5':'#86b6ef'), fillOpacity:.85})
+    .bindPopup(`<b>${p.name}</b><br>${p.sqft?fmt(p.sqft)+' sq ft on its license':'floor area not reported'}` +
+      `${p.other?'<br>Drugstore, dollar store or beverage seller (by name)':''}<br>${p.addr}`))) : null;
+
+// shaded tracts: one measure at a time, one hue light to dark, fixed breaks
+const RAMP = ['#cde2fb','#86b6ef','#3987e5','#1c5cab','#0d366b'], NODATA = '#d9d8d2';
+const MEASURES = {
+  income:{label:'Median household income', breaks:[50000,75000,100000,150000], f:v=>'$'+fmt(Math.round(v/1000))+'k'},
+  rent:{label:'Median rent', breaks:[1500,2000,2500,3000], f:v=>'$'+fmt(v)},
+  pct_black:{label:'% Black', breaks:[20,40,60,80], f:v=>v+'%'},
+  pct_white:{label:'% white', breaks:[20,40,60,80], f:v=>v+'%'},
+  pct_hisp:{label:'% Hispanic', breaks:[10,20,30,40], f:v=>v+'%'},
+  pct_foreign_born:{label:'% foreign-born', breaks:[15,25,35,45], f:v=>v+'%'},
+  pct_renters:{label:'% renters', breaks:[50,65,80,90], f:v=>v+'%'},
+};
+let measure = 'income', tractLayer = null;
+const shade = (m,v) => v==null ? NODATA : RAMP[MEASURES[m].breaks.filter(b=>v>=b).length];
+function tractTip(p){
+  const row=(k,l)=>`${l}: <b>${p[k]==null?'no estimate':MEASURES[k].f(p[k])}</b>` + (k==='income'&&p.income_moe?` ±$${fmt(Math.round(p.income_moe/1000))}k`:'');
+  return `<b>Census tract ${p.tract}</b>${p.share_in_district<98?` (${p.share_in_district}% of it is in the district)`:''}<br>` +
+    `Population: ${fmt(p.pop)}<br>` + Object.keys(MEASURES).map(k=>row(k,MEASURES[k].label)).join('<br>');
+}
+function buildTractLayer(){
+  if(!(window.TRACTS&&TRACTS.features.length)) return null;
+  return L.geoJSON(TRACTS,{style:f=>({color:'#fff',weight:1,fillColor:shade(measure,f.properties[measure]),fillOpacity:.82}),
+    onEachFeature:(f,l)=>{ l.bindTooltip(tractTip(f.properties),{sticky:true,className:'bus-lbl'});
+      l.on('mouseover',()=>l.setStyle({weight:2.5,color:'#111'})); l.on('mouseout',()=>l.setStyle({weight:1,color:'#fff'})); }});
+}
+function tractLegend(){
+  const M=MEASURES[measure], b=M.breaks;
+  const lab=i=> i===0?`under ${M.f(b[0])}`: i===b.length?`${M.f(b[i-1])} or more`:`${M.f(b[i-1])}–${M.f(b[i])}`;
+  return `<b>${M.label}</b> by census tract:` + RAMP.map((c,i)=>`<span class="swatch" style="background:${c}"></span>${lab(i)}`).join('') +
+    `<span class="swatch" style="background:${NODATA}"></span>no estimate · hover a tract for all its figures`;
+}
+
 const CD_ORDER = [3,6,7,8,9,12,14,17];
 function cdLayer(){
   if(!window.CD_GEO) return null;
@@ -360,6 +432,16 @@ const THEMES = {
   'District': {layers:[], legend:'2022 district lines. Pick a theme above to overlay data.'},
   'Community districts': {layers:[cdLayer()].filter(Boolean),
     legend:'The eight community districts overlapping SD-20 — <b>click one</b> to jump to its needs below.'},
+  'Income & demographics': {choropleth:true, layers:[], legend:''},
+  'Schools & early ed': {muted:true, layers:[educationLayer].filter(Boolean),
+    legend:(()=>{ const c=((ML.education_stats||{}).counts)||{}; const k=(col,fill,ring)=>`<span class="dotkey" style="background:${fill};border-color:${ring}"></span>`;
+      return k(0,BLUE,'#222')+`Public school (${c['Public school']||0})` + `<span class="dotkey" style="background:${BLUE};border:2.5px solid #111"></span>`+`<b style="font-weight:400">Charter, dark ring (${c['Charter school']||0})</b>` +
+        `<span class="dotkey" style="background:#fff;border:2px solid ${BLUE}"></span>Non-public (${c['Non-public school']||0})` +
+        k(0,ORANGE,'#222')+`Day care &amp; pre-K (${c['Early education']||0})` + k(0,GREEN,'#222')+`After-school program (${c['After-school program']||0}) · click a dot for who runs it`; })()},
+  'Food stores': {muted:true, layers:[foodLayer].filter(Boolean),
+    legend:(()=>{ const z=((ML.food_stats||{}).sizes)||{}; const k=(fill,px)=>`<span class="dotkey" style="background:${fill};width:${px}px;height:${px}px"></span>`;
+      return `State-licensed food stores by floor area:` + k('#1c5cab',15)+`5,000+ sq ft, supermarket-size (${z.large||0})` + k('#3987e5',10)+`2,000–4,999 (${z.medium||0})` +
+        k('#86b6ef',7)+`under 2,000, bodega-size (${z.small||0})` + k('#fff',7)+`size not reported (${z.unknown||0}) or drugstore/dollar/beverage (${(ML.food_stats||{}).other||0})`; })()},
   'Criminal justice': {layers:[precinctLayer(), shootingsLayer].filter(Boolean),
     legend:`Precincts shaded &amp; numbered · shooting incidents ${mdY(SS.first)||'2021'}–${mdY(SS.data_through)||''}: ` +
       `<b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal (${n(ML.shootings)} incidents` +
@@ -375,10 +457,20 @@ const THEMES = {
 const themeNames = Object.keys(THEMES);
 let shownLayers = [];
 const themeEl=document.getElementById('mapThemes'), legEl=document.getElementById('mapLegend');
+const measureEl=document.getElementById('measureChips');
 function setTheme(name){
   shownLayers.forEach(l=>map.removeLayer(l)); shownLayers=[];
+  const choro = !!THEMES[name].choropleth && window.TRACTS;
+  document.getElementById('map').classList.toggle('map-muted', !!(choro || THEMES[name].muted));
+  measureEl.hidden = !choro;
+  if(choro){
+    tractLayer = buildTractLayer(); tractLayer.addTo(map); shownLayers.push(tractLayer); layer.bringToFront();
+    measureEl.innerHTML = '<span class="lbl">Shade by</span>' + Object.keys(MEASURES).map(k=>
+      `<span class="chip ${k===measure?'on':''}" data-m="${k}">${MEASURES[k].label}</span>`).join('');
+    measureEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ measure=el.dataset.m; setTheme(name); });
+  }
   THEMES[name].layers.forEach(l=>{ l.addTo(map); shownLayers.push(l); });
-  legEl.innerHTML = THEMES[name].legend;
+  legEl.innerHTML = choro ? tractLegend() : THEMES[name].legend;
   themeEl.innerHTML = themeNames.map(t=>`<span class="chip ${t===name?'on':''}" data-t="${t}">${t}</span>`).join('');
   themeEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>setTheme(el.dataset.t));
 }
@@ -388,13 +480,18 @@ function setTheme(name){
   const ss = (D.maplayers && D.maplayers.shootings_stats) || {};
   document.getElementById('mapProv').innerHTML =
     `District lines: <a href="${p.url}" target="_blank">${p.source}</a>, retrieved ${p.retrieved}. ` +
-    ['precincts','shootings','subway','bus','citibike','evictions'].map(k=>ml.sources[k]).filter(Boolean).join('. ') + '. ' +
+    ['precincts','shootings','subway','bus','citibike','evictions','education','food'].map(k=>ml.sources[k]).filter(Boolean).join('. ') + '. ' +
     `Map layers retrieved ${ml.retrieved||''}. ${ml.method||''} Basemap © OpenStreetMap contributors.` +
     `<div class="cav">${ml.caveats||''}` +
     (ss.brooklyn_missing_coords!=null ? ` <b>Shootings:</b> ${ss.in_district} incidents (${fmt(ss.victims)} people shot) inside the district through ${mdY(ss.data_through)}; ` +
       `${ss.nycha} were on NYCHA property. ${ss.brooklyn_missing_coords} of ${fmt(ss.brooklyn_incidents)} Brooklyn incidents since 2021 lacked coordinates.` : '') +
     (ES.brooklyn_missing_coords!=null ? ` <b>Evictions:</b> ${fmt(ES.brooklyn_missing_coords)} of ${fmt(ES.brooklyn_records)} Brooklyn records ` +
       `(${(100*ES.brooklyn_missing_coords/ES.brooklyn_records).toFixed(1)}%) have no coordinates in the city's file and are not mapped, so the district count is an undercount.` : '') +
+    ((ML.food_stats||{}).in_district ? ` <b>Food stores:</b> the state license covers anything that sells packaged food, so bodegas, supermarkets, drugstores and dollar stores all appear; ` +
+      `"bodega" is not a license category, so floor area stands in for it, and ${ML.food_stats.sizes.unknown||0} of ${ML.food_stats.in_district} stores report none. The state last updated this file on 9/30/2025, so newer openings and closings are missing. ` +
+      `${ML.food_stats.kings_missing_coords} of ${fmt(ML.food_stats.kings_records)} Brooklyn licenses have no coordinates.` : '') +
+    (ML.education ? ` <b>Schools &amp; early ed:</b> the city's Facilities Database merges agency lists, so one building can appear more than once (a pre-K inside a public school), and family day care run from homes is not included.` : '') +
+    (window.TRACTS ? ` <b>Income &amp; demographics:</b> ${TRACTS._prov.source}. ${TRACTS._prov.caveats}` : '') +
     ` The lines were redrawn in 2022 — comparisons over time must account for it (see the Census charts).</div>`;
 }
 
@@ -538,6 +635,22 @@ const T = D.turf, tt = document.getElementById('turfTables');
     rows.map(r=>`<tr><td>${r.district}</td><td><a href="${r.link}" target="_blank">${r.member||'look up →'}</a></td>` +
       `<td class="num">${r.pct_of_sd20}%</td></tr>`).join('') + '</table>';
 });
+
+// ---- country of birth + language at home (district-wide ACS)
+if (window.ORIGINS){
+  const O = ORIGINS, pop = D.headline.stats.population;
+  const bars = (el, rows, max) => document.getElementById(el).innerHTML = rows.map(([l,n,val,tip])=>
+    `<div title="${tip||''}">${l}</div><div><div class="bar" style="width:${Math.max(1,100*n/max)}%"></div></div><div class="val" title="${tip||''}">${val}</div>`).join('');
+  document.getElementById('originsSub').textContent =
+    `${fmt(O.foreign_born_total)} residents were born outside the U.S. The twelve most common countries of birth:`;
+  bars('originsBars', O.countries.map(c=>[c.country, c.n, fmt(c.n), c.moe!=null?`± ${fmt(c.moe)} (90% margin of error)`:'']), O.countries[0].n);
+  const langs = O.languages.filter(l=>l.language!=='Speak only English'), eng = O.languages.find(l=>l.language==='Speak only English');
+  document.getElementById('langSub').textContent =
+    `${eng?eng.pct:'—'}% of residents age 5 and older speak only English at home. Everyone else, by language group (share of all residents 5+):`;
+  bars('langBars', langs.map(l=>[l.language, l.n, `${l.pct}%`, `${fmt(l.n)} speakers` + (l.n_limited_english!=null?`; ${fmt(l.n_limited_english)} speak English less than "very well"`:'')]), langs[0].n);
+  const pv = `Source: <a href="${O._prov.url}" target="_blank">${O._prov.source}</a>, retrieved ${O._prov.retrieved}. ${O._prov.method}<div class="cav">${O._prov.caveats}</div>`;
+  document.getElementById('originsProv').innerHTML = pv; document.getElementById('langProv').innerHTML = pv;
+} else { document.getElementById('originsPane').hidden = true; document.getElementById('langPane').hidden = true; }
 
 // ---- community districts (curated from each board's Statement of Community District Needs)
 {

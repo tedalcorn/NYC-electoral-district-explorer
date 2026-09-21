@@ -227,6 +227,82 @@ def build(g20, step=print, previous=None):
         keep("evictions", e)
         out["evictions_stats"] = previous.get("evictions_stats")
 
+    # --- schools, early education, after-school (NYC Facilities Database; every record has coordinates)
+    try:
+        where = "boro='BROOKLYN' AND facdomain='EDUCATION, CHILD WELFARE, AND YOUTH'"
+        frows = soda("data.cityofnewyork.us", "ji82-xba5", where,
+                     select="facname,address,latitude,longitude,facgroup,facsubgrp,factype,capacity,opname,overabbrev,datasource")
+        def edu_kind(r):
+            grp, sub = r.get("facgroup") or "", r.get("facsubgrp") or ""
+            if grp == "SCHOOLS (K-12)":
+                if "CHARTER" in sub:
+                    return "school", "Charter school"
+                if "NON-PUBLIC" in sub:
+                    return "school", "Non-public school"
+                if "GED" in sub:
+                    return None
+                return "school", "Public school"
+            if grp == "DAY CARE AND PRE-KINDERGARTEN":
+                return "early", "Early education"
+            if sub == "AFTER-SCHOOL PROGRAMS":
+                return "after", "After-school program"
+            return None
+        places, seen, n_nocoord = [], set(), 0
+        for r in frows:
+            k = edu_kind(r)
+            if not k:
+                continue
+            ll = latlon(r)
+            if ll is None:
+                n_nocoord += 1
+                continue
+            if not g20.contains(Point(ll[1], ll[0])):
+                continue
+            key = (k[0], (r.get("facname") or "").upper(), (r.get("address") or "").upper(), r.get("factype"))
+            if key in seen:                                       # the same site reported by two source files
+                continue
+            seen.add(key)
+            cap = r.get("capacity")
+            places.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "cat": k[0], "kind": k[1],
+                           "name": (r.get("facname") or "").title(), "type": (r.get("factype") or "").capitalize(),
+                           "addr": (r.get("address") or "").title(), "operator": (r.get("opname") or "").title(),
+                           "capacity": int(float(cap)) if cap not in (None, "", "0") else None})
+        out["education"] = places
+        out["education_stats"] = {"counts": dict(Counter(p["kind"] for p in places)), "brooklyn_missing_coords": n_nocoord}
+        step(f"   education: {out['education_stats']['counts']}")
+    except Exception as e:
+        keep("education", e)
+        out["education_stats"] = previous.get("education_stats")
+
+    # --- food retail: every store licensed by NYS Agriculture & Markets, with the floor area on the license
+    try:
+        srows = soda("data.ny.gov", "9a8c-vfzj", where="county='KINGS'")
+        NOT_GROCER = ("WALGREEN", "CVS", "RITE AID", "DUANE READE", "DOLLAR", "BEER", "BEVERAGE", "SODA", "PHARMACY", "99 CENT")
+        stores, n_nocoord = [], 0
+        for r in srows:
+            c = (r.get("georeference") or {}).get("coordinates")
+            if not c:
+                n_nocoord += 1
+                continue
+            if not g20.contains(Point(c[0], c[1])):
+                continue
+            name = (r.get("dba_name") or r.get("entity_name") or "").strip()
+            try:
+                sqft = int(float(r.get("square_footage") or 0))
+            except Exception:
+                sqft = 0
+            size = "unknown" if sqft <= 0 else "large" if sqft >= 5000 else "medium" if sqft >= 2000 else "small"
+            stores.append({"lat": round(c[1], 5), "lon": round(c[0], 5), "name": name.title(), "sqft": sqft or None, "size": size,
+                           "other": any(w in name.upper() for w in NOT_GROCER),
+                           "addr": f"{r.get('street_number', '')} {r.get('street_name', '')}".strip().title()})
+        out["food"] = stores
+        out["food_stats"] = {"in_district": len(stores), "sizes": dict(Counter(s["size"] for s in stores if not s["other"])),
+                             "other": sum(s["other"] for s in stores), "kings_missing_coords": n_nocoord, "kings_records": len(srows)}
+        step(f"   food retail: {len(stores)} licensed stores; {out['food_stats']}")
+    except Exception as e:
+        keep("food", e)
+        out["food_stats"] = previous.get("food_stats")
+
     out["_prov"] = {
         "sources": {
             "precincts": "NYC Open Data, Police Precincts (y76i-bdw7)",
@@ -235,6 +311,8 @@ def build(g20, step=print, previous=None):
             "bus": "MTA / NY State Open Data, MTA Bus Routes (bzwk-3hb4), routes currently in effect",
             "citibike": "Citi Bike GBFS station_information feed",
             "evictions": "NYC Open Data, Evictions (6z8x-wfk4) — residential, executed",
+            "education": "NYC Dept. of City Planning, Facilities Database (ji82-xba5): schools, day care and pre-K, after-school programs",
+            "food": "NYS Dept. of Agriculture and Markets, Retail Food Stores (9a8c-vfzj)",
         },
         "retrieved": now,
         "method": ("Each layer is clipped to the SD-20 boundary (points kept if inside; subway and bus lines clipped just past the "
@@ -259,7 +337,7 @@ if __name__ == "__main__":
         print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
     g20 = shape(json.load(open(DATA / "boundary.json"))["features"][0]["geometry"]).buffer(0)
     prev = json.load(open(DATA / "maplayers.json")) if (DATA / "maplayers.json").exists() else {}
-    step("map layers: precincts, shootings, subway, Citi Bike, bus, evictions")
+    step("map layers: precincts, shootings, subway, Citi Bike, bus, evictions, education, food retail")
     json.dump(build(g20, step, prev), open(DATA / "maplayers.json", "w"))
     bake()
     step("wrote data/maplayers.json and re-baked data/portal_data.js — DONE")

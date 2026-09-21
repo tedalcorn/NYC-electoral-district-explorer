@@ -17,7 +17,8 @@ GROUND RULES (apply to every pane)
 WHAT THE PAGE CONTAINS
 1. Map of the district (Census TIGER/Line, 2022 lines) with theme overlays: community districts;
    criminal justice (precincts + shooting incidents); transit (subway lines in MTA colors, bus routes,
-   Citi Bike); evictions. Each layer states its date range and how many records could not be mapped.
+   Citi Bike); evictions; income and demographics by census tract; schools and early education;
+   licensed food stores. Each layer states its date range and how many records could not be mapped.
 2. Who are residents — population, median household income, share foreign-born, median age,
    each shown against the citywide figure. Source: ACS 5-year (2020-24).
 3. Census detail — race/ethnicity and age vs. NYC; population and median income over time,
@@ -59,6 +60,13 @@ This static, human-checked content is embedded in index.html (const CDS) rather 
 since it changes about once a year, not daily.
 
 REVISION LOG (prune as it grows — keep it short)
+- 2026-09-21  After the students' district walks: three map themes added. "Income & demographics" shades
+              census tracts (ACS 5-year) by one measure at a time, with margins of error in the hover;
+              "Schools & early ed" (NYC Facilities Database: schools by sector, day care and pre-K,
+              after-school, with the operator of each); "Food stores" (NYS Agriculture & Markets
+              licenses, dot size = floor area, since "bodega" is not a license category). New panes:
+              country of birth and language at home. Local news restyled as wrapped newspaper columns.
+              Census layers are built by hand once a year (build/acs_static.py; needs a Census API key).
 - 2026-09-21  News: only news organizations (domain allowlist in build/news.py; Citizen app, government
               and corporate press offices, listings sites set aside and counted in the pane's notes);
               News 12's regional re-listings collapsed; coverage of one event by several outlets shown
