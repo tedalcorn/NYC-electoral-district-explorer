@@ -1,0 +1,36 @@
+name: Monthly map-layer refresh
+
+on:
+  schedule:
+    - cron: '30 11 2 * *'    # 2nd of each month, 11:30 UTC — shootings (NYPD posts quarterly), evictions, transit
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh              # same group as the daily job, so the two never push at once
+  cancel-in-progress: false
+
+jobs:
+  maplayers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install shapely
+      - name: Rebuild map layers
+        run: python3 build/maplayers.py
+      - name: Commit if changed
+        run: |
+          git config user.name "district-portal-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/maplayers.json data/portal_data.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Monthly map-layer refresh ($(date -u +%Y-%m-%d))"
+            git push
+          fi

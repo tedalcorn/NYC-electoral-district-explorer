@@ -10,16 +10,8 @@ Robustness rule: if a feed fetch comes back empty (API hiccup), keep the previou
 committed file rather than blanking the page. Uses only the Python standard library.
 """
 import json, os, time, urllib.parse, urllib.request
-import xml.etree.ElementTree as ET
-from collections import Counter
 from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from pathlib import Path
-try:
-    from zoneinfo import ZoneInfo
-    ET_TZ = ZoneInfo("America/New_York")
-except Exception:
-    ET_TZ = timezone.utc
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 NOW = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
@@ -35,83 +27,14 @@ def jfetch(url, timeout=45):
 def step(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
-# ---------------------------------------------------------------- news (mirrors build_portal.py section 5)
-step("news: Google News RSS, neighborhood + member queries, last 180 days")
-NEWS_QUERIES = ['"Zellnor Myrie"', '"Crown Heights" Brooklyn', '"Prospect Heights" Brooklyn',
-                '"Prospect Lefferts Gardens"', '"East Flatbush"', '"Wingate" Brooklyn', '"Ditmas Park"',
-                '"Prospect Park" Brooklyn', '"Flatbush" Brooklyn', '"Lefferts" Brooklyn']
-TOPICS = [
-    ("Crime & safety", ["shooting", "shot", "police", "nypd", "crime", "arrest", "violence", "gun",
-                        "stabbing", "robbery", "assault", "killed", "homicide", "shoot"]),
-    ("Housing & development", ["housing", "rent", "tenant", "eviction", "affordable", "develop", "rezon",
-                              "construction", "apartment", "real estate", "landlord", "condo", "nycha",
-                              "zoning", "deed", "building", "brownstone"]),
-    ("Schools & education", ["school", "student", "teacher", "education", "college", "university", "pre-k", "cuny"]),
-    ("Transit & streets", ["subway", "mta", "train", "transit", "bike", "traffic", "congestion pricing", "bus stop", "citi bike"]),
-    ("Health", ["health", "hospital", "covid", "clinic", "medical", "mental health"]),
-    ("Business & economy", ["business", "restaurant", "store", "shop", "jobs", "retail", "opening", "cafe", "bakery"]),
-    ("Politics & elections", ["myrie", "senator", "mayor", "council", "assembly", "election", "primary",
-                             "campaign", "bill", "legislation", "mamdani", "governor", "adams"]),
-]
-def tag(title):
-    t = title.lower()
-    for label, kws in TOPICS:
-        if any(k in t for k in kws):
-            return label
-    return "Community & other"
-
-CUTOFF_DAYS = 180
-NEWS_EXCLUDE_OUTLETS = {"MaxPreps"}
-articles, seen = [], set()
-for q in NEWS_QUERIES:
-    try:
-        url = "https://news.google.com/rss/search?q=" + urllib.parse.quote(q) + "&hl=en-US&gl=US&ceid=US:en"
-        root = ET.fromstring(fetch(url, timeout=30))
-        kept = 0
-        for it in root.iter("item"):
-            title = (it.findtext("title") or "").strip()
-            key = title.lower()
-            if not title or key in seen:
-                continue
-            try:
-                dt = parsedate_to_datetime(it.findtext("pubDate") or "")
-            except Exception:
-                continue
-            age = (datetime.now(timezone.utc) - dt).days
-            if age > CUTOFF_DAYS or age < 0:
-                continue
-            seen.add(key)
-            dt_et = dt.astimezone(ET_TZ)
-            src = it.find("source")
-            src_text = (src.text if src is not None else "").strip() or "Unknown outlet"
-            if src_text in NEWS_EXCLUDE_OUTLETS:
-                continue
-            if src_text != "Unknown outlet" and title.endswith(" - " + src_text):
-                title = title[:-(len(src_text) + 3)].strip()
-            articles.append({"title": title, "link": (it.findtext("link") or "").strip(), "outlet": src_text,
-                             "date_iso": dt_et.strftime("%Y-%m-%dT%H:%M"), "date_display": dt_et.strftime("%d/%m/%y, %-H:%M"),
-                             "topic": tag(title), "query": q})
-            kept += 1
-        step(f"   {q}: +{kept}")
-        time.sleep(1.5)
-    except Exception as e:
-        step(f"   {q} FAILED ({e})")
-if articles:
-    articles.sort(key=lambda a: a["date_iso"], reverse=True)
-    news = {"retrieved": NOW, "window_days": CUTOFF_DAYS, "total": len(articles),
-            "topic_counts": dict(Counter(a["topic"] for a in articles).most_common()),
-            "top_outlets": Counter(a["outlet"] for a in articles).most_common(12),
-            "queries": NEWS_QUERIES, "articles": articles[:200],
-            "_prov": {"source": "Google News RSS search — one query per SD-20 neighborhood plus one for Sen. Myrie",
-                      "url": "https://news.google.com/rss/search?q=<query>", "retrieved": NOW,
-                      "method": (f"{len(NEWS_QUERIES)} queries (listed in 'queries'); items deduplicated by headline, filtered "
-                                 f"to the last {CUTOFF_DAYS} days by publication date, tagged to a topic by keyword match, sorted "
-                                 f"newest first. {len(articles)} unique articles collected; the page shows the {min(200, len(articles))} most recent."),
-                      "caveats": ("Google News is relevance-ranked and caps each query near 100 results, so this is a broad sample, "
-                                  "not a census of local coverage; a neighborhood name-match does not guarantee the story is inside "
-                                  "SD-20; and topic tags are automated keyword guesses.")}}
+# ---------------------------------------------------------------- news (shared with build_portal.py: build/news.py)
+step("news: Google News RSS -> news outlets only -> duplicates removed -> same-event stories grouped")
+import news as newsfeed
+news = newsfeed.build_news(newsfeed.fetch_items(step), NOW)
+if news:
     json.dump(news, open(DATA / "news.json", "w"))
-    step(f"   wrote {len(articles)} articles")
+    step(f"   wrote {news['total']} stories from {news['n_listings']} articles; "
+         f"set aside {news['excluded']['n_items']} items from non-news sources")
 else:
     step("   NO articles fetched — keeping the previously committed news.json")
 

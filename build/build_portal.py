@@ -76,127 +76,11 @@ from shapely.ops import unary_union
 g20 = shape(sd20["geometry"]).buffer(0)
 minx, miny, maxx, maxy = g20.bounds
 
-# ---------------------------------------------------------------- 1c. map layers: precincts + shootings
-step("1c/8 map layers: police precincts + shootings within SD-20")
-from shapely.geometry import Point
-maplayers = {}
-try:
-    pj = jfetch("https://data.cityofnewyork.us/api/geospatial/y76i-bdw7?method=export&format=GeoJSON", timeout=90)
-    feats = []
-    for f in pj["features"]:
-        try:
-            if shape(f["geometry"]).buffer(0).intersects(g20):
-                pk = next((v for k, v in f["properties"].items() if "precinct" in k.lower()), "?")
-                feats.append({"type": "Feature", "properties": {"precinct": pk}, "geometry": f["geometry"]})
-        except Exception:
-            continue
-    maplayers["precincts"] = {"type": "FeatureCollection", "features": feats}
-    step(f"   precincts: {len(feats)} intersect SD-20")
-except Exception as e:
-    maplayers["precincts"] = None; step(f"   precincts FAILED ({e})")
-try:
-    where = "boro='BROOKLYN' AND occur_date>'2021-01-01T00:00:00'"
-    rows = jfetch("https://data.cityofnewyork.us/resource/833y-fsy8.json?$limit=50000&$where=" + urllib.parse.quote(where), timeout=90)
-    pts, n_nocoord = [], 0
-    for r in rows:
-        try:
-            lat, lon = float(r["latitude"]), float(r["longitude"])
-        except Exception:
-            n_nocoord += 1; continue
-        if g20.contains(Point(lon, lat)):
-            pts.append({"lat": round(lat, 5), "lon": round(lon, 5), "date": (r.get("occur_date") or "")[:10],
-                        "murder": r.get("statistical_murder_flag") in ("true", True, "Y"),
-                        "precinct": r.get("precinct")})
-    maplayers["shootings"] = pts
-    maplayers["shootings_stats"] = {"in_district": len(pts), "brooklyn_since_2021": len(rows), "brooklyn_missing_coords": n_nocoord}
-    step(f"   shootings: {len(pts)} within SD-20 (2021+); {n_nocoord}/{len(rows)} Brooklyn records lacked coordinates")
-except Exception as e:
-    maplayers["shootings"] = None; step(f"   shootings FAILED ({e})")
-# --- transit: subway stations
-try:
-    srows = jfetch("https://data.ny.gov/resource/39hk-dx4f.json?$limit=2500", timeout=90)
-    subs = []
-    for r in srows:
-        try:
-            lat, lon = float(r["gtfs_latitude"]), float(r["gtfs_longitude"])
-        except Exception:
-            continue
-        if g20.contains(Point(lon, lat)):
-            subs.append({"lat": round(lat, 5), "lon": round(lon, 5), "name": r.get("stop_name"), "routes": r.get("daytime_routes")})
-    maplayers["subway"] = subs
-    step(f"   subway: {len(subs)} stations in SD-20")
-except Exception as e:
-    maplayers["subway"] = None; step(f"   subway FAILED ({e})")
-# --- transit: Citi Bike docks (GBFS)
-try:
-    cbs = jfetch("https://gbfs.citibikenyc.com/gbfs/en/station_information.json")["data"]["stations"]
-    cb = []
-    for s in cbs:
-        try:
-            lat, lon = float(s["lat"]), float(s["lon"])
-        except Exception:
-            continue
-        if g20.contains(Point(lon, lat)):
-            cb.append({"lat": round(lat, 5), "lon": round(lon, 5), "name": s.get("name")})
-    maplayers["citibike"] = cb
-    step(f"   citibike: {len(cb)} docks in SD-20")
-except Exception as e:
-    maplayers["citibike"] = None; step(f"   citibike FAILED ({e})")
-# --- transit: MTA bus routes (clip lines to district)
-try:
-    from shapely.geometry import mapping as _mp
-    from shapely.ops import unary_union as _uu
-    bj = jfetch("https://data.ny.gov/api/geospatial/bzwk-3hb4?method=export&format=GeoJSON", timeout=120)
-    byroute = {}  # dissolve the many small segments into one line per route
-    for f in bj["features"]:
-        try:
-            gg = shape(f["geometry"])
-            if not gg.intersects(g20):
-                continue
-            clip = gg.intersection(g20.buffer(0.0015))
-            if clip.is_empty:
-                continue
-            rn = f["properties"].get("route_short_name") or f["properties"].get("route_id") or "?"
-            byroute.setdefault(rn, []).append(clip)
-        except Exception:
-            continue
-    bfeats = [{"type": "Feature", "properties": {"route": rn}, "geometry": _mp(_uu(geoms).simplify(0.0002))}
-              for rn, geoms in sorted(byroute.items())]
-    maplayers["bus"] = {"type": "FeatureCollection", "features": bfeats}
-    step(f"   bus: {len(bfeats)} routes through SD-20")
-except Exception as e:
-    maplayers["bus"] = None; step(f"   bus FAILED ({e})")
-# --- housing: residential evictions executed 2023+
-try:
-    where = "borough='BROOKLYN' AND residential_commercial_ind='Residential' AND executed_date>'2023-01-01'"
-    erows = jfetch("https://data.cityofnewyork.us/resource/6z8x-wfk4.json?$limit=60000&$where=" + urllib.parse.quote(where), timeout=90)
-    ev = []
-    for r in erows:
-        try:
-            lat, lon = float(r["latitude"]), float(r["longitude"])
-        except Exception:
-            continue
-        if g20.contains(Point(lon, lat)):
-            ev.append({"lat": round(lat, 5), "lon": round(lon, 5), "date": (r.get("executed_date") or "")[:10], "addr": r.get("eviction_address")})
-    maplayers["evictions"] = ev
-    step(f"   evictions: {len(ev)} residential in SD-20 (2023+)")
-except Exception as e:
-    maplayers["evictions"] = None; step(f"   evictions FAILED ({e})")
-maplayers["_prov"] = {
-    "sources": {
-        "precincts": "NYC Open Data, Police Precincts (y76i-bdw7)",
-        "shootings": "NYC Open Data, NYPD Shooting Incident Data — Historic (833y-fsy8)",
-        "subway": "MTA / NY State Open Data, MTA Subway Stations (39hk-dx4f)",
-        "bus": "MTA / NY State Open Data, MTA Bus Routes (bzwk-3hb4)",
-        "citibike": "Citi Bike GBFS station_information feed",
-        "evictions": "NYC Open Data, Evictions (6z8x-wfk4) — residential, executed",
-    },
-    "retrieved": NOW,
-    "method": ("Each layer is clipped to the SD-20 boundary (points kept if inside; bus lines clipped to the district). "
-               "Shootings: Brooklyn incidents since 2021. Evictions: residential, executed, since 2023. All official reports."),
-    "caveats": ("Points are shown at the location the agency recorded; records missing coordinates are dropped, not guessed. "
-                "Precinct lines are not district lines. Bus segments show routes passing through, not full routes."),
-}
+# ---------------------------------------------------------------- 1c. map layers (shared module: build/maplayers.py)
+step("1c/8 map layers: precincts, shootings, subway, Citi Bike, bus, evictions within SD-20")
+import maplayers as maplayers_mod
+_prev_ml = json.load(open(DATA / "maplayers.json")) if (DATA / "maplayers.json").exists() else {}
+maplayers = maplayers_mod.build(g20, step, _prev_ml)
 json.dump(maplayers, open(DATA / "maplayers.json", "w"))
 
 # ---------------------------------------------------------------- 2. ACS time series
@@ -400,115 +284,16 @@ for level in ("council", "assembly", "congress"):
         row["name_source"] = "verified 2026-07-14 (see _prov)"
 json.dump(turf, open(DATA / "turf.json", "w"))
 
-# ---------------------------------------------------------------- 5. local news (last ~6 months, topic-tagged)
-step("5/6 local news: Google News RSS, neighborhood + member queries, last 180 days")
-from email.utils import parsedate_to_datetime
-from collections import Counter
-try:
-    from zoneinfo import ZoneInfo
-    ET_TZ = ZoneInfo("America/New_York")
-except Exception:
-    ET_TZ = timezone.utc
-NEWS_QUERIES = [
-    '"Zellnor Myrie"',
-    '"Crown Heights" Brooklyn',
-    '"Prospect Heights" Brooklyn',
-    '"Prospect Lefferts Gardens"',
-    '"East Flatbush"',
-    '"Wingate" Brooklyn',
-    '"Ditmas Park"',
-    '"Prospect Park" Brooklyn',
-    '"Flatbush" Brooklyn',
-    '"Lefferts" Brooklyn',
-]
-TOPICS = [  # (label, keywords) — first match wins; keyword-based and approximate
-    ("Crime & safety", ["shooting", "shot", "police", "nypd", "crime", "arrest", "violence", "gun",
-                        "stabbing", "robbery", "assault", "killed", "homicide", "shoot"]),
-    ("Housing & development", ["housing", "rent", "tenant", "eviction", "affordable", "develop", "rezon",
-                              "construction", "apartment", "real estate", "landlord", "condo", "nycha",
-                              "zoning", "deed", "building", "brownstone"]),
-    ("Schools & education", ["school", "student", "teacher", "education", "college", "university", "pre-k", "cuny"]),
-    ("Transit & streets", ["subway", "mta", "train", "transit", "bike", "traffic", "congestion pricing", "bus stop", "citi bike"]),
-    ("Health", ["health", "hospital", "covid", "clinic", "medical", "mental health"]),
-    ("Business & economy", ["business", "restaurant", "store", "shop", "jobs", "retail", "opening", "cafe", "bakery"]),
-    ("Politics & elections", ["myrie", "senator", "mayor", "council", "assembly", "election", "primary",
-                             "campaign", "bill", "legislation", "mamdani", "governor", "adams"]),
-]
-def tag(title):
-    t = title.lower()
-    for label, kws in TOPICS:
-        if any(k in t for k in kws):
-            return label
-    return "Community & other"
-
-CUTOFF_DAYS = 180
-NEWS_EXCLUDE_OUTLETS = {"MaxPreps"}  # high-school sports box scores — not district news
-articles, seen = [], set()
-for q in NEWS_QUERIES:
-    try:
-        url = "https://news.google.com/rss/search?q=" + urllib.parse.quote(q) + "&hl=en-US&gl=US&ceid=US:en"
-        root = ET.fromstring(fetch(url, timeout=30))
-        kept = 0
-        for it in root.iter("item"):
-            title = (it.findtext("title") or "").strip()
-            key = title.lower()
-            if not title or key in seen:
-                continue
-            try:
-                dt = parsedate_to_datetime(it.findtext("pubDate") or "")
-            except Exception:
-                continue
-            age = (datetime.now(timezone.utc) - dt).days
-            if age > CUTOFF_DAYS or age < 0:
-                continue
-            seen.add(key)
-            dt_et = dt.astimezone(ET_TZ)
-            src = it.find("source")
-            src_text = (src.text if src is not None else "").strip() or "Unknown outlet"
-            if src_text in NEWS_EXCLUDE_OUTLETS:
-                continue
-            if src_text != "Unknown outlet" and title.endswith(" - " + src_text):
-                title = title[:-(len(src_text) + 3)].strip()  # drop Google's trailing " - Outlet"
-            articles.append({
-                "title": title,
-                "link": (it.findtext("link") or "").strip(),
-                "outlet": src_text,
-                "date_iso": dt_et.strftime("%Y-%m-%dT%H:%M"),
-                "date_display": dt_et.strftime("%d/%m/%y, %-H:%M"),
-                "topic": tag(title),
-                "query": q,
-            })
-            kept += 1
-        step(f"   {q}: +{kept} in last {CUTOFF_DAYS}d")
-        time.sleep(1.5)
-    except Exception as e:
-        step(f"   {q} FAILED ({e})")
-articles.sort(key=lambda a: a["date_iso"], reverse=True)
-topic_counts = Counter(a["topic"] for a in articles)
-outlet_counts = Counter(a["outlet"] for a in articles)
-news = {
-    "retrieved": NOW,
-    "window_days": CUTOFF_DAYS,
-    "total": len(articles),
-    "topic_counts": dict(topic_counts.most_common()),
-    "top_outlets": outlet_counts.most_common(12),
-    "queries": NEWS_QUERIES,
-    "articles": articles[:200],
-    "_prov": {
-        "source": "Google News RSS search — one query per SD-20 neighborhood plus one for Sen. Myrie",
-        "url": "https://news.google.com/rss/search?q=<query>",
-        "retrieved": NOW,
-        "method": (f"{len(NEWS_QUERIES)} queries (listed in 'queries'); items deduplicated by headline, filtered to the "
-                   f"last {CUTOFF_DAYS} days by publication date, tagged to a topic by keyword match, sorted newest first. "
-                   f"{len(articles)} unique articles collected; the page shows the {min(200, len(articles))} most recent."),
-        "caveats": ("Google News is relevance-ranked and caps each query near 100 results, so this is a broad sample, "
-                    "not a census of local coverage; a neighborhood name-match does not guarantee the story is inside "
-                    "SD-20; and topic tags are automated keyword guesses. A fully comprehensive feed would pull each "
-                    "outlet's own RSS and verify location."),
-    },
-}
-json.dump(news, open(DATA / "news.json", "w"))
-step(f"   collected {len(articles)} articles; topics: {dict(topic_counts)}")
+# ---------------------------------------------------------------- 5. local news (shared with refresh.py: build/news.py)
+step("5/6 local news: Google News RSS -> news outlets only -> duplicates removed -> same-event stories grouped")
+import news as newsfeed
+news = newsfeed.build_news(newsfeed.fetch_items(step), NOW)
+if news:
+    json.dump(news, open(DATA / "news.json", "w"))
+    step(f"   {news['total']} stories from {news['n_listings']} articles; topics: {news['topic_counts']}")
+else:
+    news = json.load(open(DATA / "news.json"))
+    step("   NO articles fetched — keeping the previously committed news.json")
 
 # ---------------------------------------------------------------- 6. copy race/income headline + turnout from district-map
 step("6/6 headline stats + turnout: reuse verified district-map data")
@@ -553,6 +338,9 @@ member = {
     "office": "New York State Senator, District 20 (since January 2019)",
     "wikipedia": "https://en.wikipedia.org/wiki/Zellnor_Myrie",
     "senate_page": "https://www.nysenate.gov/senators/zellnor-myrie",
+    # official Senate portrait, saved to img/ from the Open Legislation API's member record (imgName)
+    "photo": "img/member-sd20.jpg",
+    "photo_source": "https://legislation.nysenate.gov/static/img/business_assets/members/mini/1048_Zellnor_Myrie.jpg",
     "legislation_url": "https://www.nysenate.gov/senators/zellnor-myrie/legislation",
     "committees": ["Codes (Chair)", "Children and Families", "Consumer Protection",
                    "Elections", "Health", "Judiciary", "Rules"],

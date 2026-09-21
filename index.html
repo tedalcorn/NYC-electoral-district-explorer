@@ -23,7 +23,10 @@
 *{box-sizing:border-box} body{margin:0;background:var(--page);color:var(--ink);
   font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 header{padding:22px 28px 14px;max-width:1400px}
-h1{margin:0;font-size:22px} h1 small{color:var(--ink2);font-weight:400}
+.ident{display:flex;align-items:center;gap:14px}
+.ident img{width:60px;height:60px;border-radius:50%;object-fit:cover;object-position:50% 20%;
+  border:1px solid var(--border);flex:none;background:var(--chip)}
+h1{margin:0;font-size:22px} h1 small{display:block;color:var(--ink2);font-weight:400;font-size:15px;margin-top:2px}
 .banner{margin:10px 0 0;padding:11px 14px;background:var(--warn-bg);border:1px solid var(--border);
   border-radius:8px;font-size:13.5px;color:var(--ink2)}
 .banner b{color:var(--ink)}
@@ -42,6 +45,11 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
 .maplegend{font-size:12.5px;color:var(--ink2);margin:6px 0 0}
 .maplegend i{display:inline-block;width:22px;height:0;border-top:3px solid var(--s1);vertical-align:middle;margin-right:5px}
 .maplegend i.dash{border-top:3px dashed var(--muted)}
+.bullet{display:inline-block;min-width:17px;height:17px;line-height:17px;border-radius:50%;text-align:center;
+  font:700 11px/17px Helvetica,Arial,sans-serif;color:#fff;margin:0 1px;vertical-align:middle}
+.bullet.dk{color:#000}
+.bus-lbl{background:var(--surface);border:1px solid var(--border);color:var(--ink);font-weight:600;font-size:11.5px;padding:1px 5px}
+.art .also{color:var(--muted);font-size:12px} .art .also a{color:var(--ink2);text-decoration:underline}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tile{padding:10px 11px;border:1px solid var(--border);border-radius:8px}
 .tile .l{font-size:12px;color:var(--ink2);margin-bottom:3px}
@@ -103,7 +111,10 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
 </head>
 <body>
 <header>
-  <h1>District Portal — NY Senate District 20 <small>· Sen. Zellnor Myrie · Central Brooklyn</small></h1>
+  <div class="ident">
+    <img id="memberPhoto" alt="Official portrait of Sen. Zellnor Myrie" hidden>
+    <h1>District Portal — NY Senate District 20 <small>Sen. Zellnor Myrie · Central Brooklyn</small></h1>
+  </div>
   <div class="banner">This is a pilot dashboard built with AI assistance. It is meant to quickly collate
   available information on the district, not as the source of that information. Treat each piece of
   information on it as a <b>claim rather than a fact</b> and confirm them directly with the primary source —
@@ -257,7 +268,7 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
 
 <script>
 const D = window.PORTAL_DATA;
-const SUGGEST_FORM_URL = "https://forms.gle/2DQnYWbxcBWzUVes5";  // Google Form for student suggestions
+const SUGGEST_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeiUAMqU3D6PkhxsYIRT3utnS22Etsfg37Fot1qETmBzo28cw/viewform";  // Google Form for student suggestions
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const S1 = css('--s1'), S2 = css('--s2'), INK2 = css('--ink2'), GRID = css('--grid'), MUT = css('--muted');
 Chart.defaults.color = INK2; Chart.defaults.borderColor = GRID;
@@ -284,16 +295,39 @@ function dots(pts,colorFn,rFn,popupFn){
   return L.layerGroup((pts||[]).map(s=>L.circleMarker([s.lat,s.lon],
     {radius:rFn(s),color:colorFn(s),weight:1,fillColor:colorFn(s),fillOpacity:.6}).bindPopup(popupFn(s))));
 }
+const mdY = iso => { const p=(iso||'').split('-'); return p.length===3 ? `${+p[1]}/${+p[2]}/${p[0]}` : iso; };
+const SS = ML.shootings_stats || {}, ES = ML.evictions_stats || {};
 const shootingsLayer = (ML.shootings&&ML.shootings.length) ? dots(ML.shootings,
-  s=>s.murder?RED:ORANGE, s=>s.murder?5:3.5, s=>`Shooting — ${s.date}${s.murder?' (fatal)':''}<br>Precinct ${s.precinct||'?'}`) : null;
-const subwayLayer = (ML.subway&&ML.subway.length) ? dots(ML.subway,
-  ()=>INK, ()=>4.5, s=>`${s.name||'Subway'}<br>${s.routes||''}`) : null;
+  s=>s.murder?RED:ORANGE, s=>s.murder?5:3.5, s=>`Shooting — ${mdY(s.date)}${s.murder?' (fatal)':''}` +
+    (s.victims?`<br>${s.victims} ${s.victims>1?'people':'person'} shot${s.killed?`, ${s.killed} killed`:''}`:'') +
+    `<br>Precinct ${s.precinct||'?'}${s.nycha?' · NYCHA property':''}`) : null;
+
+// subway: lines in the MTA's trunk colors, stations as white dots, route bullets in popups
+const MTA = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD',
+  A:'#0039A6',C:'#0039A6',E:'#0039A6',B:'#FF6319',D:'#FF6319',F:'#FF6319',M:'#FF6319',G:'#6CBE45',J:'#996633',Z:'#996633',
+  L:'#A7A9AC',N:'#FCCC0A',Q:'#FCCC0A',R:'#FCCC0A',W:'#FCCC0A',S:'#808183'};
+const bullet = r => `<span class="bullet${MTA[r]==='#FCCC0A'?' dk':''}" style="background:${MTA[r]||'#555'}">${r}</span>`;
+const bullets = rs => (rs||'').split(/\s+/).filter(Boolean).map(bullet).join('');
+// Trunks that share tracks here (2/3 with 4/5 under Eastern Pkwy; B with Q; F with G) are drawn as a
+// wide line under a narrow one, so both colors stay visible at any zoom.
+const UNDER = {'456':1,'NQRW':1,'G':1}, OVER = {'123':1,'BDFM':1};
+const subwayLinesLayer = (ML.subway_lines&&ML.subway_lines.features.length) ? L.layerGroup(
+  ML.subway_lines.features.slice().sort((a,b)=>(UNDER[b.properties.trunk]||0)-(UNDER[a.properties.trunk]||0))
+    .map(f=>L.geoJSON(f,{style:{color:f.properties.color,opacity:.95,lineCap:'round',
+      weight:UNDER[f.properties.trunk]?8:OVER[f.properties.trunk]?3.5:5}})
+      .bindTooltip(f.properties.services.map(bullet).join(''),{sticky:true,className:'bus-lbl'}))) : null;
+const subwayLayer = (ML.subway&&ML.subway.length) ? L.layerGroup(ML.subway.map(s=>L.circleMarker([s.lat,s.lon],
+  {radius:4.5,color:'#111',weight:1.5,fillColor:'#fff',fillOpacity:1}).bindPopup(`<b>${s.name||'Subway'}</b><br>${bullets(s.routes)}`))) : null;
 const citibikeLayer = (ML.citibike&&ML.citibike.length) ? dots(ML.citibike,
-  ()=>TEAL, ()=>3, s=>`Citi Bike — ${s.name||''}`) : null;
+  ()=>TEAL, ()=>2.5, s=>`Citi Bike — ${s.name||''}`) : null;
+const BUSBLUE='#5b7fa6';
 const busLayer = (ML.bus&&ML.bus.features&&ML.bus.features.length) ?
-  L.geoJSON(ML.bus,{style:{color:GREEN,weight:2.5,opacity:.55}}) : null;
+  L.geoJSON(ML.bus,{style:{color:BUSBLUE,weight:1.6,opacity:.75},
+    onEachFeature:(f,l)=>{ const p=f.properties;
+      l.bindTooltip(`${p.route||''}${p.name?' · '+p.name:''}`,{sticky:true,className:'bus-lbl'});
+      l.on('mouseover',()=>l.setStyle({weight:4,opacity:1})); l.on('mouseout',()=>l.setStyle({weight:1.6,opacity:.75})); }}) : null;
 const evictionsLayer = (ML.evictions&&ML.evictions.length) ? dots(ML.evictions,
-  ()=>'#c0392b', ()=>3.5, s=>`Eviction — ${s.date}<br>${s.addr||''}`) : null;
+  ()=>'#c0392b', ()=>3.5, s=>`Eviction — ${mdY(s.date)}<br>${s.addr||''}`) : null;
 
 const CD_ORDER = [3,6,7,8,9,12,14,17];
 function cdLayer(){
@@ -320,11 +354,16 @@ const THEMES = {
   'Community districts': {layers:[cdLayer()].filter(Boolean),
     legend:'The eight community districts overlapping SD-20 — <b>click one</b> to jump to its needs below.'},
   'Criminal justice': {layers:[precinctLayer(), shootingsLayer].filter(Boolean),
-    legend:`Precincts shaded &amp; numbered · shootings 2021–: <b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal (${n(ML.shootings)} geocoded incidents)`},
-  'Transit': {layers:[busLayer, subwayLayer, citibikeLayer].filter(Boolean),
-    legend:`Subway stations <b style="color:${INK}">●</b> · bus routes <b style="color:${GREEN}">—</b> · Citi Bike docks <b style="color:${TEAL}">●</b>`},
-  'Housing': {layers:[evictionsLayer].filter(Boolean),
-    legend:`Each dot is a residential eviction executed since 2023 <b style="color:#c0392b">●</b> (${n(ML.evictions)} in the district)`},
+    legend:`Precincts shaded &amp; numbered · shooting incidents ${mdY(SS.first)||'2021'}–${mdY(SS.data_through)||''}: ` +
+      `<b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal (${n(ML.shootings)} incidents` +
+      (SS.fatal!=null?`, ${SS.fatal} fatal`:'') + `)`},
+  'Transit': {layers:[busLayer, citibikeLayer, subwayLinesLayer, subwayLayer].filter(Boolean),
+    legend:`Subway ${((ML.subway_lines||{}).features||[]).map(f=>f.properties.services.map(bullet).join('')).join(' ')} ` +
+      `· stations ○ · bus routes <b style="color:${BUSBLUE}">—</b> (${n((ML.bus||{}).features)}; hover for the route) ` +
+      `· Citi Bike docks <b style="color:${TEAL}">●</b> (${n(ML.citibike)})`},
+  'Evictions': {layers:[evictionsLayer].filter(Boolean),
+    legend:`Each dot is a residential eviction carried out by a city marshal, ${mdY(ES.first)||'2023'}–${mdY(ES.data_through)||''} ` +
+      `<b style="color:#c0392b">●</b> (${n(ML.evictions)} in the district)`},
 };
 const themeNames = Object.keys(THEMES);
 let shownLayers = [];
@@ -336,16 +375,19 @@ function setTheme(name){
   themeEl.innerHTML = themeNames.map(t=>`<span class="chip ${t===name?'on':''}" data-t="${t}">${t}</span>`).join('');
   themeEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>setTheme(el.dataset.t));
 }
-setTheme('District');
+{ const t = new URLSearchParams(location.search).get('theme'); setTheme(THEMES[t] ? t : 'District'); }  // ?theme=Transit deep-links a theme
 {
   const p = D.boundary._prov, ml = (D.maplayers && D.maplayers._prov) || {sources:{}};
   const ss = (D.maplayers && D.maplayers.shootings_stats) || {};
   document.getElementById('mapProv').innerHTML =
     `District lines: <a href="${p.url}" target="_blank">${p.source}</a>, retrieved ${p.retrieved}. ` +
-    `Precincts: ${ml.sources.precincts||'NYC Open Data'}. Shootings: ${ml.sources.shootings||'NYC Open Data'}. ` +
-    `Basemap © OpenStreetMap contributors.` +
+    ['precincts','shootings','subway','bus','citibike','evictions'].map(k=>ml.sources[k]).filter(Boolean).join('. ') + '. ' +
+    `Map layers retrieved ${ml.retrieved||''}. ${ml.method||''} Basemap © OpenStreetMap contributors.` +
     `<div class="cav">${ml.caveats||''}` +
-    (ss.brooklyn_missing_coords!=null ? ` ${ss.in_district} shootings fall inside the district; ${ss.brooklyn_missing_coords} Brooklyn records since 2021 lacked coordinates and are not shown.` : '') +
+    (ss.brooklyn_missing_coords!=null ? ` <b>Shootings:</b> ${ss.in_district} incidents (${fmt(ss.victims)} people shot) inside the district through ${mdY(ss.data_through)}; ` +
+      `${ss.nycha} were on NYCHA property. ${ss.brooklyn_missing_coords} of ${fmt(ss.brooklyn_incidents)} Brooklyn incidents since 2021 lacked coordinates.` : '') +
+    (ES.brooklyn_missing_coords!=null ? ` <b>Evictions:</b> ${fmt(ES.brooklyn_missing_coords)} of ${fmt(ES.brooklyn_records)} Brooklyn records ` +
+      `(${(100*ES.brooklyn_missing_coords/ES.brooklyn_records).toFixed(1)}%) have no coordinates in the city's file and are not mapped, so the district count is an undercount.` : '') +
     ` The lines were redrawn in 2022 — comparisons over time must account for it (see the Census charts).</div>`;
 }
 
@@ -405,6 +447,7 @@ trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
 // ---- member background
 {
   const m = D.member;
+  if (m.photo){ const ph=document.getElementById('memberPhoto'); ph.src=m.photo; ph.hidden=false; }
   document.getElementById('memberSub').textContent = m.office;
   const link = (u,t) => `<a href="${u}" target="_blank">${t}</a>`;
   document.getElementById('memberLinks').innerHTML =
@@ -433,6 +476,7 @@ trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
   const mp = m._prov;
   document.getElementById('memberProv').innerHTML =
     `Source: ${mp.source} (<a href="${mp.url}" target="_blank">district results</a>), retrieved ${mp.retrieved}. ${mp.method}` +
+    (m.photo_source ? ` Portrait: <a href="${m.photo_source}" target="_blank">New York State Senate</a>.` : '') +
     `<div class="cav">${mp.caveats}</div>`;
 }
 
@@ -554,7 +598,8 @@ const T = D.turf, tt = document.getElementById('turfTables');
   document.getElementById('newsFresh').textContent =
     (isFinite(ageH) && ageH <= 24) ? 'scraped in the last 24 h' : 'scraped ' + stamp.slice(0,10);
   document.getElementById('newsSub').textContent =
-    `${fmt(D.news.total)} stories from the last 6 months, refreshed daily; showing the ${fmt(arts.length)} most recent across ${outletsAll.length} outlets.`;
+    `${fmt(arts.length)} stories from ${outletsAll.length} news outlets over the last 6 months, refreshed daily. ` +
+    `Coverage of the same event by several outlets is listed once, with the others linked.`;
 
   const topicEl = document.getElementById('topicChips'), outletEl = document.getElementById('outletChips'),
         listEl = document.getElementById('newsList');
@@ -577,16 +622,19 @@ const T = D.turf, tt = document.getElementById('turfTables');
     listEl.innerHTML = shown.map(a=>{
       const iso = (a.date_iso||'').slice(0,10).split('-');
       const date = iso.length===3 ? `${iso[1]}/${iso[2]}/${iso[0]}` : a.date_display.split(',')[0];
+      const also = (a.also&&a.also.length) ? ` <span class="also">also: ` +
+        a.also.map(x=>`<a href="${x.link}" target="_blank" title="${esc(x.title)}">${x.outlet}</a>`).join(', ') + `</span>` : '';
       return `<div class="art">${date} (<i>${a.outlet}</i>) ` +
-        `<b><a href="${a.link}" target="_blank">“${a.title}”</a></b></div>`;
+        `<b><a href="${a.link}" target="_blank">“${a.title}”</a></b>${also}</div>`;
     }).join('') || '<p class="sub">No stories match this filter.</p>';
   }
   render();
 
   const np = D.news._prov;
   document.getElementById('newsProv').innerHTML =
-    `${np.method} ${np.source}. Queries: ${D.news.queries.map(q=>q.replace(/"/g,'')).join('; ')}.` +
-    `<div class="cav">${np.caveats} Outlet buttons show the 15 most-represented sources; ${outletsAll.length} appear in all.</div>`;
+    `Source: ${np.source}, retrieved ${np.retrieved}. ${np.method} Searches: ${D.news.queries.map(q=>q.replace(/"/g,'')).join('; ')}.` +
+    (D.news.excluded && D.news.excluded.top.length ? ` Most common sources set aside: ${D.news.excluded.top.slice(0,8).map(([o,c])=>`${o} (${c})`).join(', ')}.` : '') +
+    `<div class="cav">${np.caveats} Outlet buttons show the 15 most-represented outlets; ${outletsAll.length} appear in all.</div>`;
 }
 
 // ---- suggestion form button (set SUGGEST_FORM_URL once the Google Form exists)

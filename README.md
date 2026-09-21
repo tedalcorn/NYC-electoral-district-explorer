@@ -7,14 +7,15 @@ pilot for an NYU Wagner senior seminar. It is a starting point for reporting, **
 The current pilot is built for **NY State Senate District 20 (Sen. Zellnor Myrie), Central Brooklyn**.
 
 ## What it shows
-- **Map** with thematic layers — District, Criminal justice (precincts + shootings), Transit
-  (subway, bus, Citi Bike), Housing (evictions).
+- **Map** with thematic layers — District, Community districts, Criminal justice (precincts + shootings),
+  Transit (subway lines in MTA colors, bus routes, Citi Bike), Evictions.
 - **Who are residents** — population, income, foreign-born share, median age vs. the citywide figure (ACS).
 - **Census detail** — race/ethnicity and age vs. NYC, population and income over time (with the 2022
   redistricting break marked).
 - **Background on the member** — elections with vote totals, committees, signature priorities, socials.
 - **Legislation** — bills he prime-sponsors vs. co-sponsors, filterable by subject (NY Senate Open Legislation API).
-- **Local news** — the last six months across local outlets, deduplicated, tagged by topic, filterable.
+- **Local news** — the last six months from news organizations only, with coverage of the same event
+  grouped into one story, tagged by topic, filterable.
 
 ## How it's built
 `build/build_portal.py` fetches each source, writes one JSON per pane (each with a provenance block)
@@ -22,9 +23,13 @@ into `data/`, and bakes them into `data/portal_data.js`. `index.html` is present
 from a static file or GitHub Pages — no server.
 
 ```
-python3 build/build_portal.py     # regenerate the data
+python3 build/build_portal.py     # regenerate everything
+python3 build/refresh.py          # news + legislation only (runs daily in CI; standard library only)
+python3 build/maplayers.py        # map layers only (runs monthly in CI; needs shapely)
 open index.html                   # view
 ```
+`build/news.py` holds the news logic shared by the first two, including the list of outlets that count
+as news organizations.
 
 ### Keys (set as environment variables or CI secrets — not committed)
 - `CENSUS_API_KEY` — optional for low volume ([request one](https://api.census.gov/data/key_signup.html)).
