@@ -49,7 +49,14 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
   font:700 11px/17px Helvetica,Arial,sans-serif;color:#fff;margin:0 1px;vertical-align:middle}
 .bullet.dk{color:#000}
 .bus-lbl{background:var(--surface);border:1px solid var(--border);color:var(--ink);font-weight:600;font-size:11.5px;padding:1px 5px}
-.art .also{color:var(--muted);font-size:12px} .art .also a{color:var(--ink2);text-decoration:underline}
+.newsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:0 26px;max-height:640px;
+  overflow-y:auto;align-items:start;padding-right:6px}
+.story{padding:10px 0 11px;border-top:1px solid var(--grid)}
+.story .kick{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.story .kick b{color:var(--ink2);font-weight:600}
+.story .hed{font-family:Georgia,"Times New Roman",serif;font-size:16px;line-height:1.28;font-weight:700;color:var(--ink);display:block}
+.story .hed:hover{color:var(--s1)}
+.story .also{font-size:12px;color:var(--muted);margin-top:4px} .story .also a{color:var(--ink2);text-decoration:underline}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tile{padding:10px 11px;border:1px solid var(--border);border-radius:8px}
 .tile .l{font-size:12px;color:var(--ink2);margin-bottom:3px}
@@ -72,7 +79,7 @@ details.tbl{font-size:12.5px;margin-top:6px;color:var(--ink2)}
 details.tbl summary{cursor:pointer;color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 .chip{border:1px solid var(--border);background:var(--chip);color:var(--ink2);border-radius:999px;
-  padding:3px 11px;font-size:12.5px;cursor:pointer;user-select:none}
+  padding:3px 11px;font-size:12.5px;cursor:pointer;user-select:none;white-space:nowrap;display:inline-block;margin:0 2px 5px 0}
 .chip.on{background:var(--s1);border-color:var(--s1);color:#fff}
 .art{font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--grid)}
 .art .meta{color:var(--muted);font-size:12px;white-space:nowrap}
@@ -250,7 +257,7 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
     <p class="sub" id="newsSub"></p>
     <div class="chipgroup"><span class="lbl">Topic</span><span id="topicChips"></span></div>
     <div class="chipgroup"><span class="lbl">Outlet</span><span id="outletChips"></span></div>
-    <div class="newslist" id="newsList"></div>
+    <div class="newsgrid" id="newsList"></div>
     <details class="prov"><summary>How these stories were gathered</summary>
       <div id="newsProv"></div>
     </details>
@@ -622,10 +629,10 @@ const T = D.turf, tt = document.getElementById('turfTables');
     listEl.innerHTML = shown.map(a=>{
       const iso = (a.date_iso||'').slice(0,10).split('-');
       const date = iso.length===3 ? `${iso[1]}/${iso[2]}/${iso[0]}` : a.date_display.split(',')[0];
-      const also = (a.also&&a.also.length) ? ` <span class="also">also: ` +
-        a.also.map(x=>`<a href="${x.link}" target="_blank" title="${esc(x.title)}">${x.outlet}</a>`).join(', ') + `</span>` : '';
-      return `<div class="art">${date} (<i>${a.outlet}</i>) ` +
-        `<b><a href="${a.link}" target="_blank">“${a.title}”</a></b>${also}</div>`;
+      const also = (a.also&&a.also.length) ? `<div class="also">Also: ` +
+        a.also.map(x=>`<a href="${x.link}" target="_blank" title="${esc(x.title)}">${x.outlet}</a>`).join(', ') + `</div>` : '';
+      return `<div class="story"><div class="kick"><b>${a.outlet}</b> · ${date}</div>` +
+        `<a class="hed" href="${a.link}" target="_blank">${a.title}</a>${also}</div>`;
     }).join('') || '<p class="sub">No stories match this filter.</p>';
   }
   render();
