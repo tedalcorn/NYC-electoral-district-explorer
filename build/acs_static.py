@@ -87,6 +87,12 @@ for _, row in t.iterrows():
                                  "pct_foreign_born": pct("fb", "fb_tot"), "pct_renters": pct("renters", "ten_tot"),
                                  "pct_poverty": pct("poor", "pov_tot"), "pct_snap": pct("snap", "hh_tot"),
                                  "renter_hh": v["renters"]}})
+# whole (unclipped) tract shapes, for build scripts only: counts of evictions, complaints etc. must cover the WHOLE
+# tract, the same area its Census denominators describe, even where part of it lies outside the district
+full = [{"type": "Feature", "properties": {"tract": row.NAME},
+         "geometry": {"type": mapping(row.geometry.simplify(0.00003))["type"], "coordinates": rnd(mapping(row.geometry.simplify(0.00003))["coordinates"])}}
+        for _, row in t.iterrows()]
+json.dump({"type": "FeatureCollection", "features": full}, open(DATA / "tracts_full.json", "w"), separators=(",", ":"))
 tracts = {"type": "FeatureCollection", "features": feats,
           "_prov": {"source": f"U.S. Census Bureau, American Community Survey 5-year estimates, {VINTAGE}, by census tract",
                     "url": f"https://api.census.gov/data/{YEAR}/acs/acs5", "retrieved": NOW,

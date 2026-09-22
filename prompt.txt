@@ -60,6 +60,10 @@ This static, human-checked content is embedded in index.html (const CDS) rather 
 since it changes about once a year, not daily.
 
 REVISION LOG (prune as it grows — keep it short)
+- 2026-09-22  Every tract and point on the map has a hover label naming it by its ID in the source (tract
+              GEOID, NYPD incident key, state license number, HPD building ID, MTA station ID) and the value
+              being shown; rates show their numerator and denominator. Evictions now shown as a rate per 1,000
+              renter households by tract, counted across whole tracts so border tracts aren't understated.
 - 2026-09-22  Map redesigned as a tool for finding data and going to the original: one grouped list of views
               (Boundaries / People / Housing / Safety / Services / Getting around) replaces the theme chips and
               the separate "Shade by" row; each view is named for exactly what it shows. Under the map, one

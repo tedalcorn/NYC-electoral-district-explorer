@@ -349,7 +349,7 @@ const map = L.map('map', {scrollWheelZoom:false, zoomSnap:0.25});
 const baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   {attribution:'© OpenStreetMap contributors'}).addTo(map);
 // for the shaded (choropleth) theme the basemap is grayed out in CSS (.map-muted), so the shading is the only color
-const layer = L.geoJSON(D.boundary, {style:{color:BLUE, weight:3, fillOpacity:.03}}).addTo(map);
+const layer = L.geoJSON(D.boundary, {interactive:false, style:{color:BLUE, weight:3, fillOpacity:.03}}).addTo(map);  // drawn on top, so it must not catch the mouse
 map.fitBounds(layer.getBounds(), {padding:[14,14]});
 const ML = D.maplayers || {};
 
@@ -361,16 +361,20 @@ function precinctLayer(filled){
                                                  : {color:'#555',weight:1.2,dashArray:'4 3',fill:false},
     onEachFeature:(f,l)=>l.bindTooltip('Precinct '+(f.properties.precinct||'?'),{permanent:true,direction:'center',className:'precinct-lbl'})});
 }
-function dots(pts,colorFn,rFn,popupFn){
-  return L.layerGroup((pts||[]).map(s=>L.circleMarker([s.lat,s.lon],
-    {radius:rFn(s),color:colorFn(s),weight:1,fillColor:colorFn(s),fillOpacity:.6}).bindPopup(popupFn(s))));
+const TIP = {direction:'top', offset:[0,-4], className:'bus-lbl'};
+function dots(pts,colorFn,rFn,popupFn,tipFn){
+  return L.layerGroup((pts||[]).map(s=>{ const m=L.circleMarker([s.lat,s.lon],
+    {radius:rFn(s),color:colorFn(s),weight:1,fillColor:colorFn(s),fillOpacity:.6}).bindPopup(popupFn(s));
+    if(tipFn) m.bindTooltip(tipFn(s),TIP); return m; }));
 }
+const yr = iso => (iso||'').slice(0,4);
 const mdY = iso => { const p=(iso||'').split('-'); return p.length===3 ? `${+p[1]}/${+p[2]}/${p[0]}` : iso; };
 const SS = ML.shootings_stats || {}, ES = ML.evictions_stats || {};
 const shootingsLayer = (ML.shootings&&ML.shootings.length) ? dots(ML.shootings,
   s=>s.murder?RED:ORANGE, s=>s.murder?5:3.5, s=>`Shooting — ${mdY(s.date)}${s.murder?' (fatal)':''}` +
     (s.victims?`<br>${s.victims} ${s.victims>1?'people':'person'} shot${s.killed?`, ${s.killed} killed`:''}`:'') +
-    `<br>Precinct ${s.precinct||'?'}${s.nycha?' · NYCHA property':''}`) : null;
+    `<br>Precinct ${s.precinct||'?'}${s.nycha?' · NYCHA property':''}<br>NYPD incident key ${s.key||'?'}`,
+  s=>`<b>${s.murder?'Fatal shooting':'Nonfatal shooting'}</b>, ${mdY(s.date)}<br>NYPD incident key ${s.key||'?'}`) : null;
 
 // subway: lines in the MTA's trunk colors, stations as white dots, route bullets in popups
 const MTA = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD',
@@ -387,17 +391,16 @@ const subwayLinesLayer = (ML.subway_lines&&ML.subway_lines.features.length) ? L.
       weight:UNDER[f.properties.trunk]?8:OVER[f.properties.trunk]?3.5:5}})
       .bindTooltip(f.properties.services.map(bullet).join(''),{sticky:true,className:'bus-lbl'}))) : null;
 const subwayLayer = (ML.subway&&ML.subway.length) ? L.layerGroup(ML.subway.map(s=>L.circleMarker([s.lat,s.lon],
-  {radius:4.5,color:'#111',weight:1.5,fillColor:'#fff',fillOpacity:1}).bindPopup(`<b>${s.name||'Subway'}</b><br>${bullets(s.routes)}`))) : null;
+  {radius:4.5,color:'#111',weight:1.5,fillColor:'#fff',fillOpacity:1}).bindPopup(`<b>${s.name||'Subway'}</b><br>${bullets(s.routes)}`)
+  .bindTooltip(`<b>${s.name||'Subway'}</b> ${bullets(s.routes)}<br>MTA station ID ${s.id||'?'}`,TIP))) : null;
 const citibikeLayer = (ML.citibike&&ML.citibike.length) ? dots(ML.citibike,
-  ()=>TEAL, ()=>2.5, s=>`Citi Bike — ${s.name||''}`) : null;
+  ()=>TEAL, ()=>2.5, s=>`Citi Bike — ${s.name||''}`, s=>`<b>Citi Bike dock</b>: ${s.name||''}<br>station ${s.id||'?'}`) : null;
 const BUSBLUE='#5b7fa6';
 const busLayer = (ML.bus&&ML.bus.features&&ML.bus.features.length) ?
   L.geoJSON(ML.bus,{style:{color:BUSBLUE,weight:1.6,opacity:.75},
     onEachFeature:(f,l)=>{ const p=f.properties;
       l.bindTooltip(`${p.route||''}${p.name?' · '+p.name:''}`,{sticky:true,className:'bus-lbl'});
       l.on('mouseover',()=>l.setStyle({weight:4,opacity:1})); l.on('mouseout',()=>l.setStyle({weight:1.6,opacity:.75})); }}) : null;
-const evictionsLayer = (ML.evictions&&ML.evictions.length) ? dots(ML.evictions,
-  ()=>'#c0392b', ()=>3.5, s=>`Eviction — ${mdY(s.date)}<br>${s.addr||''}`) : null;
 
 // schools / early education / after-school: three hues; school sector shown by fill (solid, ringed, hollow)
 const EDU_COLOR = {school:BLUE, early:ORANGE, after:GREEN};
@@ -406,7 +409,8 @@ const educationLayer = (ML.education&&ML.education.length) ? L.layerGroup(ML.edu
   return L.circleMarker([p.lat,p.lon],{radius:p.cat==='school'?5.5:4, color:ring?'#111':c, weight:hollow?2.2:ring?1.8:1,
     fillColor:hollow?'#fff':c, fillOpacity:hollow?.9:.8})
     .bindPopup(`<b>${p.name}</b><br>${p.kind}${p.type&&p.type.toLowerCase()!==p.kind.toLowerCase()?' · '+p.type:''}` +
-      `${p.operator?'<br>Run by: '+p.operator:''}${p.capacity?'<br>Capacity: '+fmt(p.capacity):''}<br>${p.addr}`);})) : null;
+      `${p.operator?'<br>Run by: '+p.operator:''}${p.capacity?'<br>Capacity: '+fmt(p.capacity):''}<br>${p.addr}`)
+    .bindTooltip(`<b>${p.name}</b><br>${p.kind}${p.type&&p.type.toLowerCase()!==p.kind.toLowerCase()?' · '+p.type:''}<br>Facilities Database ID ${(p.uid||'?').slice(0,10)}…`,TIP);})) : null;
 
 // food retail: one hue, dot size = floor area on the state license
 const FOOD_R = {large:8, medium:5, small:3, unknown:3};
@@ -414,7 +418,8 @@ const foodLayer = (ML.food&&ML.food.length) ? L.layerGroup(ML.food.slice().sort(
   L.circleMarker([p.lat,p.lon],{radius:p.other?3:FOOD_R[p.size], color:p.other||p.size==='unknown'?'#777':'#0d366b', weight:1,
     fillColor:p.other||p.size==='unknown'?'#fff':(p.size==='large'?'#1c5cab':p.size==='medium'?'#3987e5':'#86b6ef'), fillOpacity:.85})
     .bindPopup(`<b>${p.name}</b><br>${p.sqft?fmt(p.sqft)+' sq ft on its license':'floor area not reported'}` +
-      `${p.other?'<br>Drugstore, dollar store or beverage seller (by name)':''}<br>${p.addr}`))) : null;
+      `${p.other?'<br>Drugstore, dollar store or beverage seller (by name)':''}<br>${p.addr}<br>State license ${p.lic||'?'}`)
+    .bindTooltip(`<b>${p.name}</b><br>Floor area: ${p.sqft?fmt(p.sqft)+' sq ft':'not reported'}<br>State license ${p.lic||'?'}`,TIP))) : null;
 
 // shaded tracts: one measure at a time, one hue light to dark, fixed breaks
 const RAMP = ['#cde2fb','#86b6ef','#3987e5','#1c5cab','#0d366b'], NODATA = '#d9d8d2';
@@ -431,10 +436,13 @@ const MEASURES = {
 };
 let measure = 'income', tractLayer = null;
 const shade = (m,v) => v==null ? NODATA : RAMP[MEASURES[m].breaks.filter(b=>v>=b).length];
+const geoid = t => { const [a,b='00']=String(t).split('.'); return '36047' + a.padStart(4,'0') + b.padEnd(2,'0'); };
 function tractTip(p){
-  const row=(k,l)=>`${l}: <b>${p[k]==null?'no estimate':MEASURES[k].f(p[k])}</b>` + (k==='income'&&p.income_moe?` ±$${fmt(Math.round(p.income_moe/1000))}k`:'');
-  return `<b>Census tract ${p.tract}</b>${p.share_in_district<98?` (${p.share_in_district}% of it is in the district)`:''}<br>` +
-    `Population: ${fmt(p.pop)}<br>` + Object.keys(MEASURES).map(k=>row(k,MEASURES[k].label)).join('<br>');
+  const M=MEASURES[measure], v=p[measure];
+  const val = v==null ? 'no estimate' : M.f(v) + (measure==='income'&&p.income_moe ? ` <span style="font-weight:400">± $${fmt(Math.round(p.income_moe/1000))}k</span>` : '');
+  return `<b>Census tract ${p.tract}</b> · GEOID ${geoid(p.tract)}<br>` +
+    `${M.label}: <b>${val}</b>` + (M.parts && v!=null ? `<br><span style="color:var(--muted)">${M.parts(p)}</span>` : '') +
+    `<br>Population ${fmt(p.pop)}${p.share_in_district<98?` · ${p.share_in_district}% of the tract is inside the district`:''}`;
 }
 function buildTractLayer(){
   if(!(window.TRACTS&&TRACTS.features.length)) return null;
@@ -450,6 +458,8 @@ function tractLegend(){
 }
 
 const CD_ORDER = [3,6,7,8,9,12,14,17];
+const CD_SHARE = {9:100,8:83.7,17:18.8,7:17.1,6:16.9,3:6.5,14:5.4,12:2.9}; // % of each CB inside SD-20 (projected, EPSG:2263)
+const cbTip = L.tooltip({className:'bus-lbl', direction:'top', offset:[0,-8]});
 function cdLayer(){
   if(!window.CD_GEO) return null;
   const PAL=['#6b4bb0','#2a78d6','#1baf7a','#e8843a','#b3122b','#d048a0','#3aa0a0','#7a9a2a'];
@@ -459,6 +469,11 @@ function cdLayer(){
     onEachFeature:(f,l)=>{
       const cd=f.properties.cd;
       l.bindTooltip('CB'+cd,{permanent:true,direction:'center',className:'precinct-lbl'});
+      // the permanent "CB#" label occupies the layer's own tooltip, so the hover card is one shared tooltip that follows the cursor
+      const txt=`<b>Brooklyn Community Board ${cd}</b> · community district ${300+cd}<br>${CD_SHARE[cd]}% of the board is inside SD-20 · click for its needs`;
+      l.on('mouseover',e=>{ cbTip.setContent(txt).setLatLng(e.latlng).addTo(map); });
+      l.on('mousemove',e=>cbTip.setLatLng(e.latlng));
+      l.on('mouseout',()=>map.removeLayer(cbTip));
       l.on('mouseover',()=>l.setStyle({fillOpacity:.26,weight:3}));
       l.on('mouseout',()=>l.setStyle({fillOpacity:.10,weight:2}));
       l.on('click',()=>{const el=document.getElementById('cd-'+cd);
@@ -476,9 +491,17 @@ const HPD = (ML.hpd && ML.hpd.rows) ? ML.hpd.rows.map(r=>Object.fromEntries(ML.h
 if (window.TRACTS && HS.tract_problems){
   TRACTS.features.forEach(f=>{ const p=f.properties, k=HS.tract_problems[p.tract]||0;
     p.hpd_rate = (p.renter_hh && p.renter_hh>=100) ? Math.round(100*k/p.renter_hh) : null; });
-  MEASURES.hpd_rate = {label:'Tenant complaints per 100 renter households', breaks:[25,50,75,100], f:v=>String(v)};
+  MEASURES.hpd_rate = {label:'Tenant complaints per 100 renter households', breaks:[25,50,75,100], f:v=>String(v),
+    parts:p=>`${fmt(HS.tract_problems[p.tract]||0)} problems ÷ ${fmt(p.renter_hh)} renter households`};
 }
-const PEOPLE_KEYS = Object.keys(MEASURES).filter(k=>k!=='hpd_rate');
+const EVN = ((ML.evictions_stats||{}).tract_n) || null;
+if (window.TRACTS && EVN){
+  TRACTS.features.forEach(f=>{ const p=f.properties; p.evict_n = EVN[p.tract]||0;
+    p.evict_rate = (p.renter_hh && p.renter_hh>=100) ? Math.round(10000*p.evict_n/p.renter_hh)/10 : null; });
+  MEASURES.evict_rate = {label:`Evictions per 1,000 renter households, ${yr((ML.evictions_stats||{}).first)}–${yr((ML.evictions_stats||{}).data_through)}`,
+    breaks:[5,15,25,40], f:v=>String(v), parts:p=>`${fmt(p.evict_n)} evictions ÷ ${fmt(p.renter_hh)} renter households`};
+}
+const PEOPLE_KEYS = Object.keys(MEASURES).filter(k=>!['hpd_rate','evict_rate'].includes(k));
 const HPD_COLOR = '#c2410c';
 const hpdR = b => 2 + Math.sqrt(b.n)*0.55;
 const hpdCsv = b => `https://data.cityofnewyork.us/resource/ygpa-z7cr.csv?building_id=${b.id}&$limit=5000&$where=` +
@@ -501,7 +524,9 @@ function hpdCut(pct){ let run=0, k=0; for(const b of HPD){ if(run>=HPD_TOTAL*pct
 function hpdDraw(){
   const k = hpdCut(hpdPct); hpdGroup.clearLayers();
   HPD.slice(0,k).slice().reverse().forEach(b=>L.circleMarker([b.lat,b.lon],{radius:hpdR(b),color:'#7c2d12',weight:1,fillColor:HPD_COLOR,fillOpacity:.55})
-    .bindPopup(hpdPopup(b)).addTo(hpdGroup));
+    .bindPopup(hpdPopup(b))
+    .bindTooltip(`<b>${b.addr}</b><br>${fmt(b.n)} problems reported, last 12 months${b.units?` (${(b.n/b.units).toFixed(1)} per apartment)`:''}<br>HPD building ID ${b.id}`,TIP)
+    .addTo(hpdGroup));
   document.getElementById('hpdPctLbl').textContent = hpdPct+'%';
   document.getElementById('hpdSummary').innerHTML = `<b>${fmt(k)} buildings</b>, ${(100*k/HPD.length).toFixed(k/HPD.length<.1?1:0)}% of the ${fmt(HPD.length)} ` +
     `with any complaint, account for ${hpdPct}% of the ${fmt(HPD_TOTAL)} problems reported. They are the dots on the map.`;
@@ -541,14 +566,13 @@ function hpdPanel(el){
   document.getElementById('hpdSlider').oninput = e=>{ hpdPct=+e.target.value; hpdDraw(); };
   hpdDraw(); hpdRank();
 }
-const yr = iso => (iso||'').slice(0,4);
 const mY = iso => { const p=(iso||'').split('-'); return p.length>=2 ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+p[0] : iso; };
 const META = ML._meta || {};
 
 // ---------------- sources: one entry per dataset. Every view lists the ones it draws on.
 const ACS_TABLE = {income:['B19013','Median household income'], rent:['B25064','Median gross rent'], pct_black:['B03002','Hispanic or Latino origin by race'],
   pct_white:['B03002','Hispanic or Latino origin by race'], pct_hisp:['B03002','Hispanic or Latino origin by race'], pct_foreign_born:['B05002','Place of birth by nativity'],
-  pct_renters:['B25003','Tenure (owner or renter)'], hpd_rate:['B25003','Renter households (the denominator)'], pct_poverty:['B17001','Poverty status in the past 12 months'], pct_snap:['B22003','Receipt of food stamps/SNAP']};
+  pct_renters:['B25003','Tenure (owner or renter)'], hpd_rate:['B25003','Renter households (the denominator)'], evict_rate:['B25003','Renter households (the denominator)'], pct_poverty:['B17001','Poverty status in the past 12 months'], pct_snap:['B22003','Receipt of food stamps/SNAP']};
 const openData = (id, fallbackName, fallbackAgency) => { const m=META[id]||{}; return {
   title: m.name || fallbackName, pub: (m.agency||fallbackAgency) + ' · ' + (m.url||'').replace('https://','').split('/')[0],
   url: m.url || '', updated: m.updated }; };
@@ -574,9 +598,10 @@ const SOURCES = {
     cav:'NYPD places most shootings at the middle of a street segment, so a dot is approximate and several incidents can share one spot. An older NYPD file (833y-fsy8) ended in 2024 and counted victims rather than incidents; don\'t mix the two.'}),
   evictions: () => ({...openData('6z8x-wfk4','Evictions','Department of Investigation (DOI)'),
     row:'One residential eviction carried out by a city marshal',
-    cover:`${mY(ES.first)} to ${mY(ES.data_through)}`, onmap:`${fmt(ES.in_district)} evictions in the district`,
+    cover:`${mY(ES.first)} to ${mY(ES.data_through)}`,
+    onmap:`${fmt(ES.in_district)} evictions inside the district. Each tract's rate counts evictions across the whole tract, including any part outside the district, so it matches the tract's renter households`,
     missing: ES.brooklyn_records ? `${fmt(ES.brooklyn_missing_coords)} of ${fmt(ES.brooklyn_records)} Brooklyn records (${(100*ES.brooklyn_missing_coords/ES.brooklyn_records).toFixed(1)}%) have no coordinates, so the district total is an undercount` : '',
-    cav:'These are completed evictions only. Eviction cases filed in Housing Court, most of which never end in a marshal\'s visit, are a separate and much larger count.'}),
+    cav:'The rate covers the whole period, not one year. These are completed evictions only. Eviction cases filed in Housing Court, most of which never end in a marshal\'s visit, are a separate and much larger count.'}),
   education: () => { const c=((ML.education_stats||{}).counts)||{}; return {...openData('ji82-xba5','Facilities Database','Department of City Planning (DCP)'),
     row:'One facility or program site, as reported by the agency that funds or licenses it',
     onmap:Object.entries(c).map(([k,v])=>`${v} ${k.toLowerCase()}${v===1?'':'s'}`).join(', ').replace('early educations','day care and pre-K sites'),
@@ -598,7 +623,7 @@ const SOURCES = {
   hpd: () => ({...openData('ygpa-z7cr','Housing Maintenance Code Complaints and Problems','Department of Housing Preservation and Development (HPD)'),
     row:'One problem reported in a tenant\'s complaint to HPD, usually through 311. A single complaint can list several problems.',
     cover:`${mdY(HS.since)} to ${mdY(HS.through)} (the last 12 months)`,
-    onmap:`${fmt(HS.problems)} problems in ${fmt(HS.complaints)} complaints, from ${fmt(HS.buildings)} buildings`,
+    onmap:`${fmt(HS.problems)} problems in ${fmt(HS.complaints)} complaints, from ${fmt(HS.buildings)} buildings inside the district. The by-tract view counts across each whole tract, including any part outside the district, to match its renter households`,
     missing: HS.brooklyn_missing_coords!=null ? `${fmt(HS.brooklyn_missing_coords)} of ${fmt(HS.brooklyn_problems)} Brooklyn records in this period have no coordinates` : '',
     extra:[['Verified conditions are a separate file', 'https://data.cityofnewyork.us/d/wvxf-dwi5', 'Housing Maintenance Code Violations']],
     cav:'A complaint is a tenant\'s report, not a verified violation; HPD\'s inspection findings are in the violations file linked above. One persistent tenant can file hundreds of complaints, so check whether a single apartment dominates (each building\'s popup says). Heat complaints pile up in heat season, Oct. 1 to May 31. Look at the status descriptions in the raw records before reading "closed" as "fixed."'}),
@@ -644,8 +669,7 @@ const VIEWS = [
   {group:'Housing', id:'hpd', label:'Tenant complaints, by building', muted:true, layers:[hpdGroup], src:['hpd','pluto'], extra:hpdPanel,
     legend:`Each dot is a building; size = problems reported to HPD, ${mdY(HS.since)}–${mdY(HS.through)}. Use the slider below to find the buildings that drive the total.`},
   ...(MEASURES.hpd_rate ? [{group:'Housing', id:'tract-hpd_rate', label:'Tenant complaints, by census tract', choro:'hpd_rate', src:['hpd','acs:hpd_rate','tracts']}] : []),
-  {group:'Housing', id:'evictions', label:`Evictions, ${yr(ES.first)}–${yr(ES.data_through)}`, muted:true, layers:[evictionsLayer], src:['evictions'],
-    legend:`Each dot is a residential eviction carried out by a city marshal <b style="color:#c0392b">●</b> (${fmt(n(ML.evictions))})`},
+  ...(MEASURES.evict_rate ? [{group:'Housing', id:'evictions', label:`Evictions, by census tract`, choro:'evict_rate', src:['evictions','acs:evict_rate','tracts']}] : []),
   {group:'Safety', id:'shootings', label:`Shootings, ${yr(SS.first)}–${yr(SS.data_through)}`, muted:true, layers:[precinctLayer(false), shootingsLayer], src:['shootings','precincts'],
     legend:`Shooting incidents, ${mY(SS.first)}–${mY(SS.data_through)}: <b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal ` +
       `(${fmt(n(ML.shootings))} incidents, ${fmt(SS.fatal)} fatal) · dashed lines are precincts`},
@@ -875,7 +899,6 @@ if (window.ORIGINS){
       note:'Highest foreclosure rate in Brooklyn (10.5 per 1,000 small homes).',
       stmt:['https://cbbrooklyn.cityofnewyork.us/cb17/wp-content/uploads/sites/6/2026/01/FY2027_Statement_BK17.pdf','Statement of needs (FY2027)']},
   ];
-  const CD_SHARE = {9:100,8:83.7,17:18.8,7:17.1,6:16.9,3:6.5,14:5.4,12:2.9}; // % of each CB inside SD-20 (projected, EPSG:2263)
   CDS.sort((a,b)=>CD_SHARE[b.cd]-CD_SHARE[a.cd]);
   document.getElementById('cdGrid').innerHTML = CDS.map(c=>
     `<div class="cdcard" id="cd-${c.cd}"><h3>CB${c.cd} · ${c.hoods}</h3>` +

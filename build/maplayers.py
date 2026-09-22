@@ -68,6 +68,24 @@ def geo(g, tol):
     m = mapping(g.simplify(tol))
     return {"type": m["type"], "coordinates": rnd(m["coordinates"])}
 
+def full_tracts():
+    """Whole census tracts that overlap the district (data/tracts_full.json, written by acs_static.py)."""
+    p = DATA / "tracts_full.json"
+    return [(f["properties"]["tract"], shape(f["geometry"])) for f in json.load(open(p))["features"]] if p.exists() else []
+
+def tract_counts(points):
+    """{tract name: number of points inside the WHOLE tract}. Pass every point near the district, not just those
+    inside it, so a border tract's count covers the same area as its Census denominator."""
+    shapes = full_tracts()
+    n = {}
+    for lat, lon in points:
+        pt = Point(lon, lat)
+        for tr, sh in shapes:
+            if sh.contains(pt):
+                n[tr] = n.get(tr, 0) + 1
+                break
+    return n
+
 def build(g20, step=print, previous=None):
     previous = previous or {}
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
@@ -113,7 +131,7 @@ def build(g20, step=print, previous=None):
                 continue
             if g20.contains(Point(ll[1], ll[0])):
                 k = r["incident_key"]
-                pts.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "date": (r.get("occur_date") or "")[:10],
+                pts.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "date": (r.get("occur_date") or "")[:10], "key": k,
                             "murder": n_killed[k] > 0, "victims": n_vic[k] or None, "killed": n_killed[k],
                             "precinct": r.get("precinct"), "nycha": r.get("jurisdiction_code") == "2"})
         pts.sort(key=lambda p: p["date"])
@@ -136,7 +154,8 @@ def build(g20, step=print, previous=None):
         for r in jfetch("https://data.ny.gov/resource/39hk-dx4f.json?$limit=2500"):
             ll = latlon(r, "gtfs_latitude", "gtfs_longitude")
             if ll and g20.contains(Point(ll[1], ll[0])):
-                subs.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "name": r.get("stop_name"), "routes": r.get("daytime_routes")})
+                subs.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "name": r.get("stop_name"), "routes": r.get("daytime_routes"),
+                             "id": r.get("station_id")})
         out["subway"] = subs
         step(f"   subway: {len(subs)} stations in the district")
     except Exception as e:
@@ -173,7 +192,7 @@ def build(g20, step=print, previous=None):
         for s in jfetch("https://gbfs.citibikenyc.com/gbfs/en/station_information.json")["data"]["stations"]:
             ll = latlon(s, "lat", "lon")
             if ll and g20.contains(Point(ll[1], ll[0])):
-                cb.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "name": s.get("name")})
+                cb.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "name": s.get("name"), "id": s.get("short_name") or s.get("station_id")})
         out["citibike"] = cb
         step(f"   citibike: {len(cb)} docks in the district")
     except Exception as e:
@@ -219,9 +238,10 @@ def build(g20, step=print, previous=None):
             if g20.contains(Point(ll[1], ll[0])):
                 ev.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "date": (r.get("executed_date") or "")[:10], "addr": r.get("eviction_address")})
         ev.sort(key=lambda p: p["date"])
-        out["evictions"] = ev
+        out["evictions"] = None                                   # shown as a rate by census tract, not as points
         out["evictions_stats"] = {"in_district": len(ev), "first": EVICTIONS_SINCE, "data_through": max((r.get("executed_date") or "")[:10] for r in erows),
-                                  "brooklyn_records": len(erows), "brooklyn_missing_coords": n_nocoord}
+                                  "brooklyn_records": len(erows), "brooklyn_missing_coords": n_nocoord,
+                                  "tract_n": tract_counts([ll for ll in (latlon(r) for r in erows) if ll])}
         step(f"   evictions: {len(ev)} in the district; {n_nocoord}/{len(erows)} Brooklyn records lacked coordinates")
     except Exception as e:
         keep("evictions", e)
@@ -231,7 +251,7 @@ def build(g20, step=print, previous=None):
     try:
         where = "boro='BROOKLYN' AND facdomain='EDUCATION, CHILD WELFARE, AND YOUTH'"
         frows = soda("data.cityofnewyork.us", "ji82-xba5", where,
-                     select="facname,address,latitude,longitude,facgroup,facsubgrp,factype,capacity,opname,overabbrev,datasource")
+                     select="uid,facname,address,latitude,longitude,facgroup,facsubgrp,factype,capacity,opname,overabbrev,datasource")
         def edu_kind(r):
             grp, sub = r.get("facgroup") or "", r.get("facsubgrp") or ""
             if grp == "SCHOOLS (K-12)":
@@ -263,7 +283,7 @@ def build(g20, step=print, previous=None):
                 continue
             seen.add(key)
             cap = r.get("capacity")
-            places.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "cat": k[0], "kind": k[1],
+            places.append({"lat": round(ll[0], 5), "lon": round(ll[1], 5), "cat": k[0], "kind": k[1], "uid": r.get("uid"),
                            "name": (r.get("facname") or "").title(), "type": (r.get("factype") or "").capitalize(),
                            "addr": (r.get("address") or "").title(), "operator": (r.get("opname") or "").title(),
                            "capacity": int(float(cap)) if cap not in (None, "", "0") else None})
@@ -293,6 +313,7 @@ def build(g20, step=print, previous=None):
                 sqft = 0
             size = "unknown" if sqft <= 0 else "large" if sqft >= 5000 else "medium" if sqft >= 2000 else "small"
             stores.append({"lat": round(c[1], 5), "lon": round(c[0], 5), "name": name.title(), "sqft": sqft or None, "size": size,
+                           "lic": r.get("license_number"),
                            "other": any(w in name.upper() for w in NOT_GROCER),
                            "addr": f"{r.get('street_number', '')} {r.get('street_name', '')}".strip().title()})
         out["food"] = stores
@@ -306,12 +327,15 @@ def build(g20, step=print, previous=None):
     # --- tenant complaints to HPD, last 12 months, rolled up to buildings (and to census tracts if the tract file exists)
     try:
         since = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
-        W, S, E, N = g20.bounds
+        ft = full_tracts()
+        W, S, E, N = unary_union([g20] + [sh for _, sh in ft]).bounds         # whole border tracts reach past the district
         box = f"latitude between {S} and {N} AND longitude between {W} and {E}"
         rows = soda("data.cityofnewyork.us", "ygpa-z7cr", f"{box} AND received_date>='{since}T00:00:00'",
                     select="complaint_id,building_id,bbl,house_number,street_name,apartment,received_date,major_category,"
                            "minor_category,problem_status,latitude,longitude")
-        rows = [r for r in rows if r.get("latitude") and g20.contains(Point(float(r["longitude"]), float(r["latitude"])))]
+        rows = [r for r in rows if r.get("latitude")]
+        tract_n = tract_counts([(float(r["latitude"]), float(r["longitude"])) for r in rows])
+        rows = [r for r in rows if g20.contains(Point(float(r["longitude"]), float(r["latitude"])))]
         # residential units per tax lot, from PLUTO, to express complaints per apartment
         pl = soda("data.cityofnewyork.us", "64uk-42ks", f"{box} AND unitsres>0", select="bbl,unitsres")
         units = {str(r["bbl"]).split(".")[0]: int(float(r["unitsres"])) for r in pl}
@@ -340,18 +364,6 @@ def build(g20, step=print, previous=None):
         cols = ["id", "lat", "lon", "addr", "n", "complaints", "units", "heat", "open", "repeats", "top_apt", "top_apt_share", "cats"]
         out["hpd"] = {"cols": cols, "cat_names": cat_names,
                       "rows": [[b[c] if c != "cats" else [[cat_names.index(k), v] for k, v in b["cats"]] for c in cols] for b in blds]}
-        tract_n = {}
-        acs_js = DATA / "acs_static.js"
-        if acs_js.exists():
-            src = acs_js.read_text()
-            T = json.loads(src[src.index("{"):src.index(";\nwindow.ORIGINS")])
-            shapes = [(f["properties"]["tract"], shape(f["geometry"])) for f in T["features"]]
-            for r in rows:
-                pt = Point(float(r["longitude"]), float(r["latitude"]))
-                for tr, sh in shapes:
-                    if sh.contains(pt):
-                        tract_n[tr] = tract_n.get(tr, 0) + 1
-                        break
         total = sum(b["n"] for b in blds)
         try:
             nocoord = int(jfetch("https://data.cityofnewyork.us/resource/ygpa-z7cr.json?" + urllib.parse.urlencode({"$select": "count(*)",
