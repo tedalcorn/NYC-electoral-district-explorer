@@ -51,7 +51,8 @@ print("ACS 5-year", VINTAGE)
 # ---------------------------------------------------------------- tracts
 TV = {"B01003_001E": "pop", "B19013_001E": "income", "B19013_001M": "income_moe", "B25064_001E": "rent",
       "B03002_001E": "r_tot", "B03002_003E": "r_white", "B03002_004E": "r_black", "B03002_006E": "r_asian", "B03002_012E": "r_hisp",
-      "B05002_001E": "fb_tot", "B05002_013E": "fb", "B25003_001E": "ten_tot", "B25003_003E": "renters"}
+      "B05002_001E": "fb_tot", "B05002_013E": "fb", "B25003_001E": "ten_tot", "B25003_003E": "renters",
+      "B17001_001E": "pov_tot", "B17001_002E": "poor", "B22003_001E": "hh_tot", "B22003_002E": "snap"}
 recs = {r["tract"]: r for r in api(YEAR, "get=" + ",".join(TV) + f"&for=tract:*&in=state:{STATE}%20county:{COUNTY}")}
 g20 = shape(json.load(open(DATA / "boundary.json"))["features"][0]["geometry"]).buffer(0)
 t = gpd.read_file(TRACT_ZIP)
@@ -83,12 +84,13 @@ for _, row in t.iterrows():
                                  "income": v["income"], "income_moe": v["income_moe"], "rent": v["rent"],
                                  "pct_black": pct("r_black", "r_tot"), "pct_white": pct("r_white", "r_tot"),
                                  "pct_hisp": pct("r_hisp", "r_tot"), "pct_asian": pct("r_asian", "r_tot"),
-                                 "pct_foreign_born": pct("fb", "fb_tot"), "pct_renters": pct("renters", "ten_tot")}})
+                                 "pct_foreign_born": pct("fb", "fb_tot"), "pct_renters": pct("renters", "ten_tot"),
+                                 "pct_poverty": pct("poor", "pov_tot"), "pct_snap": pct("snap", "hh_tot")}})
 tracts = {"type": "FeatureCollection", "features": feats,
           "_prov": {"source": f"U.S. Census Bureau, American Community Survey 5-year estimates, {VINTAGE}, by census tract",
                     "url": f"https://api.census.gov/data/{YEAR}/acs/acs5", "retrieved": NOW,
                     "method": ("Tables B19013 (median household income), B25064 (median gross rent), B03002 (race/ethnicity; White, "
-                               "Black and Asian are non-Hispanic), B05002 (foreign-born), B25003 (renters). Tract shapes (Census "
+                               "Black and Asian are non-Hispanic), B05002 (foreign-born), B25003 (renters), B17001 (people below the federal poverty line), B22003 (households that received SNAP in the past 12 months). Tract shapes (Census "
                                "cartographic boundaries, 2023) are clipped to the district; tracts less than 2% inside are dropped."),
                     "caveats": ("Tract estimates rest on small samples and carry wide margins of error: a typical tract's median income "
                                 "is ±$15,000–$30,000, so neighboring shades can differ by chance. Values describe the WHOLE tract even where "

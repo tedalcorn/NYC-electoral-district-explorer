@@ -387,6 +387,8 @@ const MEASURES = {
   pct_hisp:{label:'% Hispanic', breaks:[10,20,30,40], f:v=>v+'%'},
   pct_foreign_born:{label:'% foreign-born', breaks:[15,25,35,45], f:v=>v+'%'},
   pct_renters:{label:'% renters', breaks:[50,65,80,90], f:v=>v+'%'},
+  pct_poverty:{label:'% below poverty line', breaks:[10,15,20,30], f:v=>v+'%'},
+  pct_snap:{label:'% of households on SNAP', breaks:[10,15,25,35], f:v=>v+'%'},
 };
 let measure = 'income', tractLayer = null;
 const shade = (m,v) => v==null ? NODATA : RAMP[MEASURES[m].breaks.filter(b=>v>=b).length];
