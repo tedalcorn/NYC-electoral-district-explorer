@@ -53,7 +53,29 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
 .map-muted .leaflet-tile-pane{filter:grayscale(1) contrast(.8) brightness(1.12);opacity:.55}
 .swatch{display:inline-block;width:22px;height:11px;vertical-align:middle;margin:0 3px 0 9px;border:1px solid var(--border)}
 .dotkey{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin:0 3px 0 9px;border:1px solid #222}
-#measureChips{margin:6px 0 0}
+.mapwrap{display:grid;grid-template-columns:232px 1fr;gap:14px;align-items:start}
+@media(max-width:760px){.mapwrap{grid-template-columns:1fr}}
+.layernav{font-size:13px}
+.layernav h4{margin:9px 0 2px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.layernav h4:first-child{margin-top:0}
+.layernav h4 small{text-transform:none;letter-spacing:0;font-weight:400}
+.layernav button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:2.5px 8px;
+  font:inherit;color:var(--ink2);cursor:pointer;line-height:1.3}
+.layernav button:hover{background:var(--chip)}
+.layernav button.on{background:var(--s1);color:#fff}
+#map{height:560px}
+@media(max-width:760px){#map{height:400px}}
+.about{margin-top:12px;border-top:1px solid var(--grid);padding-top:8px;font-size:13px;color:var(--ink2)}
+.about summary{cursor:pointer;font-weight:600;color:var(--ink);font-size:13.5px}
+.src{padding:10px 0;border-bottom:1px dashed var(--grid)}
+.src:last-child{border-bottom:0}
+.src h4{margin:0 0 2px;font-size:13.5px;color:var(--ink)}
+.src .pub{color:var(--muted);font-size:12.5px;margin-bottom:5px}
+.src .go{font-weight:600;white-space:nowrap}
+.src dl{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:2px 12px;margin:0 0 5px}
+.src dt{color:var(--muted);font-size:12.5px} .src dd{margin:0}
+.src .cav{margin:4px 0 0;padding:6px 9px;background:var(--warn-bg);border-radius:6px}
+.src.base h4{color:var(--muted);font-weight:600}
 .bars{display:grid;grid-template-columns:max-content 1fr max-content;gap:5px 10px;align-items:center;font-size:13px}
 .bars .bar{height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
 .bars .val{color:var(--ink2);font-variant-numeric:tabular-nums;font-size:12.5px}
@@ -65,7 +87,7 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
 .story .hed{font-family:Georgia,"Times New Roman",serif;font-size:16px;line-height:1.28;font-weight:700;color:var(--ink);display:block}
 .story .hed:hover{color:var(--s1)}
 .story .also{font-size:12px;color:var(--muted);margin-top:4px} .story .also a{color:var(--ink2);text-decoration:underline}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
 .tile{padding:10px 11px;border:1px solid var(--border);border-radius:8px}
 .tile .l{font-size:12px;color:var(--ink2);margin-bottom:3px}
 .tile .v{font-size:21px;font-weight:650;line-height:1.1}
@@ -148,20 +170,25 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
   </section>
 
   <!-- MAP -->
-  <section class="pane c8">
-    <h2>The district</h2>
-    <p class="sub">Central Brooklyn — pick a theme to overlay data</p>
-    <div class="chipgroup" id="mapThemes"></div>
-    <div id="map"></div>
-    <div class="chipgroup" id="measureChips" hidden></div>
-    <div class="maplegend" id="mapLegend"></div>
-    <details class="prov"><summary>Source &amp; caveats</summary>
-      <div id="mapProv"></div>
+  <section class="pane c12" id="mapPane">
+    <h2>Map of the district</h2>
+    <p class="sub">Each view shows one public dataset, cut to the district's lines. Below the map: where it comes from,
+    what it leaves out, and a link to the original so you can explore it yourself.</p>
+    <div class="mapwrap">
+      <nav class="layernav" id="layerNav" aria-label="Map views"></nav>
+      <div class="mapcol">
+        <div id="map"></div>
+        <div class="maplegend" id="mapLegend"></div>
+      </div>
+    </div>
+    <details class="about" id="mapAboutBox" open>
+      <summary>About the data in this view</summary>
+      <div id="mapAbout"></div>
     </details>
   </section>
 
   <!-- WHO ARE RESIDENTS -->
-  <section class="pane c4">
+  <section class="pane c12">
     <h2>Who are residents?</h2>
     <p class="sub">American Community Survey (U.S. Census Bureau), 5-year estimates, 2020–2024</p>
     <div class="stats" id="stats"></div>
@@ -307,7 +334,7 @@ const fmt = n => n==null ? '—' : n.toLocaleString();
 
 // ---- map: district + thematic layer bundles ("pages")
 const PURPLE='#6b4bb0', RED='#b3122b', ORANGE='#e8843a', BLUE='#2a78d6', GREEN='#1baf7a', TEAL='#0e7c86', INK='#111';
-const map = L.map('map', {scrollWheelZoom:false});
+const map = L.map('map', {scrollWheelZoom:false, zoomSnap:0.25});
 const baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   {attribution:'© OpenStreetMap contributors'}).addTo(map);
 // for the shaded (choropleth) theme the basemap is grayed out in CSS (.map-muted), so the shading is the only color
@@ -315,11 +342,12 @@ const layer = L.geoJSON(D.boundary, {style:{color:BLUE, weight:3, fillOpacity:.0
 map.fitBounds(layer.getBounds(), {padding:[14,14]});
 const ML = D.maplayers || {};
 
-function precinctLayer(){
+function precinctLayer(filled){
   if(!(ML.precincts && ML.precincts.features.length)) return null;
   const PAL=['#6b4bb0','#2a78d6','#1baf7a','#e8843a','#b3122b','#d048a0','#3aa0a0','#7a9a2a','#9a5a2a','#5566c9'];
   ML.precincts.features.forEach((f,i)=>f.properties._color=PAL[i%PAL.length]);
-  return L.geoJSON(ML.precincts,{style:f=>({color:f.properties._color,weight:2,fillColor:f.properties._color,fillOpacity:.28}),
+  return L.geoJSON(ML.precincts,{style:f=>filled ? {color:f.properties._color,weight:2,fillColor:f.properties._color,fillOpacity:.28}
+                                                 : {color:'#555',weight:1.2,dashArray:'4 3',fill:false},
     onEachFeature:(f,l)=>l.bindTooltip('Precinct '+(f.properties.precinct||'?'),{permanent:true,direction:'center',className:'precinct-lbl'})});
 }
 function dots(pts,colorFn,rFn,popupFn){
@@ -430,72 +458,131 @@ function cdLayer(){
 }
 
 const n = a => (a&&a.length)||0;
-const THEMES = {
-  'District': {layers:[], legend:'2022 district lines. Pick a theme above to overlay data.'},
-  'Community districts': {layers:[cdLayer()].filter(Boolean),
-    legend:'The eight community districts overlapping SD-20 — <b>click one</b> to jump to its needs below.'},
-  'Income & demographics': {choropleth:true, layers:[], legend:''},
-  'Schools & early ed': {muted:true, layers:[educationLayer].filter(Boolean),
-    legend:(()=>{ const c=((ML.education_stats||{}).counts)||{}; const k=(col,fill,ring)=>`<span class="dotkey" style="background:${fill};border-color:${ring}"></span>`;
-      return k(0,BLUE,'#222')+`Public school (${c['Public school']||0})` + `<span class="dotkey" style="background:${BLUE};border:2.5px solid #111"></span>`+`<b style="font-weight:400">Charter, dark ring (${c['Charter school']||0})</b>` +
-        `<span class="dotkey" style="background:#fff;border:2px solid ${BLUE}"></span>Non-public (${c['Non-public school']||0})` +
-        k(0,ORANGE,'#222')+`Day care &amp; pre-K (${c['Early education']||0})` + k(0,GREEN,'#222')+`After-school program (${c['After-school program']||0}) · click a dot for who runs it`; })()},
-  'Food stores': {muted:true, layers:[foodLayer].filter(Boolean),
-    legend:(()=>{ const z=((ML.food_stats||{}).sizes)||{}; const k=(fill,px)=>`<span class="dotkey" style="background:${fill};width:${px}px;height:${px}px"></span>`;
-      return `State-licensed food stores by floor area:` + k('#1c5cab',15)+`5,000+ sq ft, supermarket-size (${z.large||0})` + k('#3987e5',10)+`2,000–4,999 (${z.medium||0})` +
-        k('#86b6ef',7)+`under 2,000, bodega-size (${z.small||0})` + k('#fff',7)+`size not reported (${z.unknown||0}) or drugstore/dollar/beverage (${(ML.food_stats||{}).other||0})`; })()},
-  'Criminal justice': {layers:[precinctLayer(), shootingsLayer].filter(Boolean),
-    legend:`Precincts shaded &amp; numbered · shooting incidents ${mdY(SS.first)||'2021'}–${mdY(SS.data_through)||''}: ` +
-      `<b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal (${n(ML.shootings)} incidents` +
-      (SS.fatal!=null?`, ${SS.fatal} fatal`:'') + `)`},
-  'Transit': {layers:[busLayer, citibikeLayer, subwayLinesLayer, subwayLayer].filter(Boolean),
-    legend:`Subway ${((ML.subway_lines||{}).features||[]).map(f=>f.properties.services.map(bullet).join('')).join(' ')} ` +
-      `· stations ○ · bus routes <b style="color:${BUSBLUE}">—</b> (${n((ML.bus||{}).features)}; hover for the route) ` +
-      `· Citi Bike docks <b style="color:${TEAL}">●</b> (${n(ML.citibike)})`},
-  'Evictions': {layers:[evictionsLayer].filter(Boolean),
-    legend:`Each dot is a residential eviction carried out by a city marshal, ${mdY(ES.first)||'2023'}–${mdY(ES.data_through)||''} ` +
-      `<b style="color:#c0392b">●</b> (${n(ML.evictions)} in the district)`},
+const yr = iso => (iso||'').slice(0,4);
+const mY = iso => { const p=(iso||'').split('-'); return p.length>=2 ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+p[0] : iso; };
+const META = ML._meta || {};
+
+// ---------------- sources: one entry per dataset. Every view lists the ones it draws on.
+const ACS_TABLE = {income:['B19013','Median household income'], rent:['B25064','Median gross rent'], pct_black:['B03002','Hispanic or Latino origin by race'],
+  pct_white:['B03002','Hispanic or Latino origin by race'], pct_hisp:['B03002','Hispanic or Latino origin by race'], pct_foreign_born:['B05002','Place of birth by nativity'],
+  pct_renters:['B25003','Tenure (owner or renter)'], pct_poverty:['B17001','Poverty status in the past 12 months'], pct_snap:['B22003','Receipt of food stamps/SNAP']};
+const openData = (id, fallbackName, fallbackAgency) => { const m=META[id]||{}; return {
+  title: m.name || fallbackName, pub: (m.agency||fallbackAgency) + ' · ' + (m.url||'').replace('https://','').split('/')[0],
+  url: m.url || '', updated: m.updated }; };
+const SOURCES = {
+  district: () => ({title:'State Senate districts (2022 lines)', pub:'U.S. Census Bureau, TIGER/Line 2024',
+    url:'https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html',
+    row:'One legislative district boundary', cover:'Lines used in the 2022 and 2024 elections',
+    cav:'The district was redrawn in 2022. Anything measured before then describes somewhat different territory.'}),
+  basemap: () => ({title:'Street map', pub:'OpenStreetMap contributors', url:'https://www.openstreetmap.org/copyright',
+    row:'Streets, parks and place names drawn by volunteers', cav:''}),
+  cb: () => ({...openData('5crt-au7u','Community Districts','Department of City Planning (DCP)'),
+    row:'One community district boundary', onmap:'The eight community districts that overlap SD-20. Click one to jump to its card.',
+    cav:'Community boards and the Senate district have different lines; the share of each board inside SD-20 is our calculation (shown on each card).'}),
+  precincts: () => ({...openData('y76i-bdw7','Police Precincts','Police Department (NYPD)'),
+    row:'One police precinct boundary', onmap:`${n((ML.precincts||{}).features)} precincts touch the district`,
+    cav:'Precinct lines are not district lines. Several precincts fall only partly inside SD-20, so precinct-wide statistics mix in areas outside it.'}),
+  shootings: () => ({...openData('5ucz-vwe8','Shootings (2006-Present)','Police Department (NYPD)'),
+    extra:[['Victims file (fatal or not, number shot)', (META['pztn-9bne']||{}).url, (META['pztn-9bne']||{}).name||'Shooting Victims']],
+    row:'One shooting incident. An incident can have several victims; it counts as fatal if any victim\'s death was classified a murder.',
+    cover:`${mY(SS.first)} to ${mY(SS.data_through)} (NYPD adds a quarter at a time)`,
+    onmap:`${fmt(SS.in_district)} incidents, ${fmt(SS.fatal)} fatal, ${fmt(SS.victims)} people shot; ${fmt(SS.nycha)} on NYCHA property`,
+    missing: SS.brooklyn_missing_coords ? `${fmt(SS.brooklyn_missing_coords)} of ${fmt(SS.brooklyn_incidents)} Brooklyn incidents since ${yr(SS.first)} have no coordinates` : `Nothing dropped: all ${fmt(SS.brooklyn_incidents)} Brooklyn incidents since ${yr(SS.first)} have coordinates`,
+    cav:'NYPD places most shootings at the middle of a street segment, so a dot is approximate and several incidents can share one spot. An older NYPD file (833y-fsy8) ended in 2024 and counted victims rather than incidents; don\'t mix the two.'}),
+  evictions: () => ({...openData('6z8x-wfk4','Evictions','Department of Investigation (DOI)'),
+    row:'One residential eviction carried out by a city marshal',
+    cover:`${mY(ES.first)} to ${mY(ES.data_through)}`, onmap:`${fmt(ES.in_district)} evictions in the district`,
+    missing: ES.brooklyn_records ? `${fmt(ES.brooklyn_missing_coords)} of ${fmt(ES.brooklyn_records)} Brooklyn records (${(100*ES.brooklyn_missing_coords/ES.brooklyn_records).toFixed(1)}%) have no coordinates, so the district total is an undercount` : '',
+    cav:'These are completed evictions only. Eviction cases filed in Housing Court, most of which never end in a marshal\'s visit, are a separate and much larger count.'}),
+  education: () => { const c=((ML.education_stats||{}).counts)||{}; return {...openData('ji82-xba5','Facilities Database','Department of City Planning (DCP)'),
+    row:'One facility or program site, as reported by the agency that funds or licenses it',
+    onmap:Object.entries(c).map(([k,v])=>`${v} ${k.toLowerCase()}${v===1?'':'s'}`).join(', ').replace('early educations','day care and pre-K sites'),
+    cav:'The city compiles this from dozens of agency lists, so one building can appear twice (a pre-K inside a public school). Family day care run from homes is not included. Click a dot to see who runs it.'}; },
+  food: () => { const f=ML.food_stats||{}; return {...openData('9a8c-vfzj','Retail Food Stores','Department of Agriculture and Markets'),
+    row:'One retail food store license. Anything that sells packaged food needs one: supermarkets, bodegas, drugstores, dollar stores.',
+    onmap:`${fmt(f.in_district)} licensed stores`,
+    missing:`${fmt((f.sizes||{}).unknown)} report no floor area; ${fmt(f.kings_missing_coords)} of ${fmt(f.kings_records)} Brooklyn licenses have no coordinates`,
+    cav:'"Bodega" is not a license category, so floor area stands in for store size. Drugstores, dollar stores and beverage sellers are flagged by name only. Check the publisher\'s last-update date: stores that opened or closed since then are wrong here.'}; },
+  subway: () => ({...openData('39hk-dx4f','MTA Subway Stations','Metropolitan Transportation Authority'),
+    extra:[['Subway line shapes', (META['s692-irgq']||{}).url, ((META['s692-irgq']||{}).name||'MTA Subway Service Lines') + ((META['s692-irgq']||{}).updated?`, last updated ${mdY(META['s692-irgq'].updated)}`:'')]],
+    row:'One station complex; lines are drawn from the MTA\'s service-line file', onmap:`${n(ML.subway)} stations; lines colored by the MTA's trunk colors`,
+    cav:'Shows scheduled daytime service. Where two lines share track, one is drawn over the other.'}),
+  bus: () => ({...openData('bzwk-3hb4','MTA Bus Routes','Metropolitan Transportation Authority'),
+    row:'One route shape currently in effect (temporary subway shuttles removed)', onmap:`${n((ML.bus||{}).features)} routes pass through; hover a line for its name`,
+    cav:'Segments are cut at the district line, so a route shown here usually continues well beyond it.'}),
+  citibike: () => ({title:'Citi Bike station information (live feed)', pub:'Lyft / Citi Bike, GBFS feed', url:'https://citibikenyc.com/system-data',
+    row:'One docking station', onmap:`${n(ML.citibike)} docks`, cover:`As of ${(ML._prov||{}).retrieved||''}`, cav:''}),
+  tracts: () => ({title:'Census tract boundaries', pub:'U.S. Census Bureau, cartographic boundary files 2023',
+    url:'https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html',
+    row:'One census tract, usually 2,000 to 7,000 people', onmap: window.TRACTS ? `${TRACTS.features.length} tracts at least 2% inside the district, trimmed to its lines` : '',
+    cav:'Tracts ignore district lines. For a tract that straddles the border, the figures describe the whole tract, including the part outside; hover to see how much is inside.'}),
 };
-const themeNames = Object.keys(THEMES);
+const acsSource = m => { const [t,name]=ACS_TABLE[m]; return {title:`${name} (table ${t})`,
+  pub:'U.S. Census Bureau, American Community Survey 5-year estimates, 2020–2024', url:`https://data.census.gov/table/ACSDT5Y2024.${t}`,
+  row:'An estimate for each census tract, pooled from five years of surveys', cover:'2020 through 2024 combined, not a single year',
+  cav:'Tract estimates rest on small samples and carry wide margins of error: a typical tract\'s median income is give or take $15,000 to $30,000, so neighboring shades can differ by chance (hover a tract to see its margin). Gray means the Census published no estimate.'}; };
+
+function srcBlock(x, base){
+  const dd=(k,v)=>v?`<dt>${k}</dt><dd>${v}</dd>`:'';
+  return `<div class="src${base?' base':''}"><h4>${x.title}</h4>` +
+    `<div class="pub">${x.pub}${x.url?` · <a class="go" href="${x.url}" target="_blank">Open the original ↗</a>`:''}</div>` +
+    `<dl>${dd('What one record is',x.row)}${dd('Covers',x.cover)}${dd('Publisher last updated',x.updated?mdY(x.updated):'')}` +
+    `${dd('On this map',x.onmap)}${dd('Not on this map',x.missing)}` +
+    (x.extra||[]).map(([k,u,t])=>dd(k,u?`<a href="${u}" target="_blank">${t} ↗</a>`:t)).join('') + `</dl>` +
+    (x.cav?`<div class="cav">${x.cav}</div>`:'') + `</div>`;
+}
+
+// ---------------- views: one list, grouped by subject. Each shows one dataset (or one closely tied set).
+const eduLegend = (()=>{ const c=((ML.education_stats||{}).counts)||{}; const k=(fill,ring)=>`<span class="dotkey" style="background:${fill};border-color:${ring}"></span>`;
+  return k(BLUE,'#222')+`Public school (${c['Public school']||0})` + `<span class="dotkey" style="background:${BLUE};border:2.5px solid #111"></span>Charter, dark ring (${c['Charter school']||0})` +
+    `<span class="dotkey" style="background:#fff;border:2px solid ${BLUE}"></span>Non-public (${c['Non-public school']||0})` +
+    k(ORANGE,'#222')+`Day care &amp; pre-K (${c['Early education']||0})` + k(GREEN,'#222')+`After-school program (${c['After-school program']||0}) · click a dot for who runs it`; })();
+const foodLegend = (()=>{ const z=((ML.food_stats||{}).sizes)||{}; const k=(fill,px)=>`<span class="dotkey" style="background:${fill};width:${px}px;height:${px}px"></span>`;
+  return `By floor area on the license:` + k('#1c5cab',15)+`5,000+ sq ft, supermarket-size (${z.large||0})` + k('#3987e5',10)+`2,000–4,999 (${z.medium||0})` +
+    k('#86b6ef',7)+`under 2,000, bodega-size (${z.small||0})` + k('#fff',7)+`size not reported (${z.unknown||0}) or drugstore/dollar/beverage (${(ML.food_stats||{}).other||0})`; })();
+
+const VIEWS = [
+  {group:'Boundaries', id:'district', label:'District lines only', layers:[], src:[],
+    legend:'The 2022 lines of State Senate District 20. Pick a view on the left.'},
+  {group:'Boundaries', id:'cb', label:'Community boards', layers:[cdLayer()], src:['cb'],
+    legend:'The eight community districts overlapping SD-20. <b>Click one</b> to jump to its needs below.'},
+  {group:'Boundaries', id:'precincts', label:'Police precincts', layers:[precinctLayer(true)], src:['precincts'],
+    legend:'Police precincts, each shaded and numbered.'},
+  ...Object.keys(MEASURES).map(k=>({group:'People', note:'census tracts shaded by', id:'tract-'+k, label:MEASURES[k].label.replace(/^% /,'Share '), choro:k, src:['acs:'+k,'tracts']})),
+  {group:'Housing', id:'evictions', label:`Evictions, ${yr(ES.first)}–${yr(ES.data_through)}`, muted:true, layers:[evictionsLayer], src:['evictions'],
+    legend:`Each dot is a residential eviction carried out by a city marshal <b style="color:#c0392b">●</b> (${fmt(n(ML.evictions))})`},
+  {group:'Safety', id:'shootings', label:`Shootings, ${yr(SS.first)}–${yr(SS.data_through)}`, muted:true, layers:[precinctLayer(false), shootingsLayer], src:['shootings','precincts'],
+    legend:`Shooting incidents, ${mY(SS.first)}–${mY(SS.data_through)}: <b style="color:${ORANGE}">●</b> nonfatal <b style="color:${RED}">●</b> fatal ` +
+      `(${fmt(n(ML.shootings))} incidents, ${fmt(SS.fatal)} fatal) · dashed lines are precincts`},
+  {group:'Services', id:'schools', label:'Schools, pre-K & after-school', muted:true, layers:[educationLayer], src:['education'], legend:eduLegend},
+  {group:'Services', id:'food', label:'Food stores', muted:true, layers:[foodLayer], src:['food'], legend:foodLegend},
+  {group:'Getting around', id:'transit', label:'Subway, bus & Citi Bike', layers:[busLayer, citibikeLayer, subwayLinesLayer, subwayLayer], src:['subway','bus','citibike'],
+    legend:`Subway ${((ML.subway_lines||{}).features||[]).map(f=>f.properties.services.map(bullet).join('')).join(' ')} ` +
+      `· stations ○ · bus routes <b style="color:${BUSBLUE}">—</b> · Citi Bike docks <b style="color:${TEAL}">●</b>`},
+].map(v=>({...v, layers:(v.layers||[]).filter(Boolean)}));
+
 let shownLayers = [];
-const themeEl=document.getElementById('mapThemes'), legEl=document.getElementById('mapLegend');
-const measureEl=document.getElementById('measureChips');
-function setTheme(name){
+const navEl=document.getElementById('layerNav'), legEl=document.getElementById('mapLegend'), aboutEl=document.getElementById('mapAbout');
+{ let g='', html='';
+  VIEWS.forEach(v=>{ if(v.group!==g){ g=v.group; html+=`<h4>${g}${v.note?` <small>${v.note}</small>`:''}</h4>`; }
+    html+=`<button type="button" data-v="${v.id}">${v.label}</button>`; });
+  navEl.innerHTML = html;
+  navEl.querySelectorAll('button').forEach(el=>el.onclick=()=>setView(el.dataset.v)); }
+function setView(id){
+  const v = VIEWS.find(x=>x.id===id) || VIEWS[0];
   shownLayers.forEach(l=>map.removeLayer(l)); shownLayers=[];
-  const choro = !!THEMES[name].choropleth && window.TRACTS;
-  document.getElementById('map').classList.toggle('map-muted', !!(choro || THEMES[name].muted));
-  measureEl.hidden = !choro;
-  if(choro){
-    tractLayer = buildTractLayer(); tractLayer.addTo(map); shownLayers.push(tractLayer); layer.bringToFront();
-    measureEl.innerHTML = '<span class="lbl">Shade by</span>' + Object.keys(MEASURES).map(k=>
-      `<span class="chip ${k===measure?'on':''}" data-m="${k}">${MEASURES[k].label}</span>`).join('');
-    measureEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ measure=el.dataset.m; setTheme(name); });
-  }
-  THEMES[name].layers.forEach(l=>{ l.addTo(map); shownLayers.push(l); });
-  legEl.innerHTML = choro ? tractLegend() : THEMES[name].legend;
-  themeEl.innerHTML = themeNames.map(t=>`<span class="chip ${t===name?'on':''}" data-t="${t}">${t}</span>`).join('');
-  themeEl.querySelectorAll('.chip').forEach(el=>el.onclick=()=>setTheme(el.dataset.t));
+  document.getElementById('map').classList.toggle('map-muted', !!(v.choro || v.muted));
+  if(v.choro && window.TRACTS){ measure=v.choro; tractLayer=buildTractLayer(); tractLayer.addTo(map); shownLayers.push(tractLayer); }
+  v.layers.forEach(l=>{ l.addTo(map); shownLayers.push(l); });
+  layer.bringToFront();
+  legEl.innerHTML = v.choro ? tractLegend() : v.legend;
+  navEl.querySelectorAll('button').forEach(el=>el.classList.toggle('on', el.dataset.v===v.id));
+  // what every view shares (district lines, street map) up top, then each dataset behind this view
+  aboutEl.innerHTML = srcBlock(SOURCES.district(), true) + srcBlock(SOURCES.basemap(), true) +
+    v.src.map(k=> k.startsWith('acs:') ? srcBlock(acsSource(k.slice(4))) : srcBlock(SOURCES[k]())).join('');
+  if(history.replaceState){ const u=new URL(location); u.searchParams.set('view', v.id); u.searchParams.delete('theme'); history.replaceState(null,'',u); }
 }
-{ const t = new URLSearchParams(location.search).get('theme'); setTheme(THEMES[t] ? t : 'District'); }  // ?theme=Transit deep-links a theme
-{
-  const p = D.boundary._prov, ml = (D.maplayers && D.maplayers._prov) || {sources:{}};
-  const ss = (D.maplayers && D.maplayers.shootings_stats) || {};
-  document.getElementById('mapProv').innerHTML =
-    `District lines: <a href="${p.url}" target="_blank">${p.source}</a>, retrieved ${p.retrieved}. ` +
-    ['precincts','shootings','subway','bus','citibike','evictions','education','food'].map(k=>ml.sources[k]).filter(Boolean).join('. ') + '. ' +
-    `Map layers retrieved ${ml.retrieved||''}. ${ml.method||''} Basemap © OpenStreetMap contributors.` +
-    `<div class="cav">${ml.caveats||''}` +
-    (ss.brooklyn_missing_coords!=null ? ` <b>Shootings:</b> ${ss.in_district} incidents (${fmt(ss.victims)} people shot) inside the district through ${mdY(ss.data_through)}; ` +
-      `${ss.nycha} were on NYCHA property. ${ss.brooklyn_missing_coords} of ${fmt(ss.brooklyn_incidents)} Brooklyn incidents since 2021 lacked coordinates.` : '') +
-    (ES.brooklyn_missing_coords!=null ? ` <b>Evictions:</b> ${fmt(ES.brooklyn_missing_coords)} of ${fmt(ES.brooklyn_records)} Brooklyn records ` +
-      `(${(100*ES.brooklyn_missing_coords/ES.brooklyn_records).toFixed(1)}%) have no coordinates in the city's file and are not mapped, so the district count is an undercount.` : '') +
-    ((ML.food_stats||{}).in_district ? ` <b>Food stores:</b> the state license covers anything that sells packaged food, so bodegas, supermarkets, drugstores and dollar stores all appear; ` +
-      `"bodega" is not a license category, so floor area stands in for it, and ${ML.food_stats.sizes.unknown||0} of ${ML.food_stats.in_district} stores report none. The state last updated this file on 9/30/2025, so newer openings and closings are missing. ` +
-      `${ML.food_stats.kings_missing_coords} of ${fmt(ML.food_stats.kings_records)} Brooklyn licenses have no coordinates.` : '') +
-    (ML.education ? ` <b>Schools &amp; early ed:</b> the city's Facilities Database merges agency lists, so one building can appear more than once (a pre-K inside a public school), and family day care run from homes is not included.` : '') +
-    (window.TRACTS ? ` <b>Income &amp; demographics:</b> ${TRACTS._prov.source}. ${TRACTS._prov.caveats}` : '') +
-    ` The lines were redrawn in 2022 — comparisons over time must account for it (see the Census charts).</div>`;
-}
+setView(new URLSearchParams(location.search).get('view') || 'district');   // ?view=shootings links straight to a view
 
 // ---- headline tiles: label first, with citywide comparison
 const h = D.headline.stats, city = D.headline.city;

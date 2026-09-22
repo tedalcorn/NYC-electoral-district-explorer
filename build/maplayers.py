@@ -303,6 +303,23 @@ def build(g20, step=print, previous=None):
         keep("food", e)
         out["food_stats"] = previous.get("food_stats")
 
+    # --- the publisher's own record for each dataset: official name, agency, and when it last changed.
+    # Shown on the page so students can judge freshness themselves and go straight to the original.
+    out["_meta"] = {}
+    for dom, ds in [("data.cityofnewyork.us", "y76i-bdw7"), ("data.cityofnewyork.us", "5ucz-vwe8"), ("data.cityofnewyork.us", "pztn-9bne"),
+                    ("data.ny.gov", "39hk-dx4f"), ("data.ny.gov", "s692-irgq"), ("data.ny.gov", "bzwk-3hb4"),
+                    ("data.cityofnewyork.us", "6z8x-wfk4"), ("data.cityofnewyork.us", "ji82-xba5"), ("data.ny.gov", "9a8c-vfzj"),
+                    ("data.cityofnewyork.us", "5crt-au7u")]:
+        try:
+            m = jfetch(f"https://{dom}/api/views/{ds}.json", timeout=60)
+            upd = m.get("rowsUpdatedAt")
+            out["_meta"][ds] = {"name": m.get("name"), "agency": m.get("attribution"), "url": f"https://{dom}/d/{ds}",
+                                "updated": datetime.fromtimestamp(upd, timezone.utc).strftime("%Y-%m-%d") if upd else None}
+        except Exception as e:
+            out["_meta"][ds] = (previous.get("_meta") or {}).get(ds) or {"url": f"https://{dom}/d/{ds}"}
+            step(f"   metadata for {ds} FAILED ({e})")
+    step(f"   dataset metadata: {[(k, v.get('updated')) for k, v in out['_meta'].items()]}")
+
     out["_prov"] = {
         "sources": {
             "precincts": "NYC Open Data, Police Precincts (y76i-bdw7)",
