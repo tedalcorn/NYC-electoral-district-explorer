@@ -490,7 +490,7 @@ out = {}
 for name in ("boundary", "trends", "people", "turf", "news", "headline", "member", "maplayers", "legislation"):
     out[name] = json.load(open(DATA / f"{name}.json"))
 with open(DATA / "portal_data.js", "w") as fh:
-    fh.write("window.PORTAL_DATA = " + json.dumps(out) + ";")
+    fh.write("window.PORTAL_DATA = " + json.dumps(out, separators=(",", ":")) + ";")
 step("baked data/portal_data.js (index.html reads this — works from file://)")
 step("DONE. Data in " + str(DATA))
 

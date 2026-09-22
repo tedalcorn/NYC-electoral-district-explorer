@@ -10,7 +10,7 @@ HARD RULE: no invented data. A record without usable coordinates is counted and 
 """
 import json, sys, time, urllib.parse, urllib.request
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from shapely.geometry import shape, mapping, Point
 from shapely.ops import unary_union
@@ -303,13 +303,80 @@ def build(g20, step=print, previous=None):
         keep("food", e)
         out["food_stats"] = previous.get("food_stats")
 
+    # --- tenant complaints to HPD, last 12 months, rolled up to buildings (and to census tracts if the tract file exists)
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
+        W, S, E, N = g20.bounds
+        box = f"latitude between {S} and {N} AND longitude between {W} and {E}"
+        rows = soda("data.cityofnewyork.us", "ygpa-z7cr", f"{box} AND received_date>='{since}T00:00:00'",
+                    select="complaint_id,building_id,bbl,house_number,street_name,apartment,received_date,major_category,"
+                           "minor_category,problem_status,latitude,longitude")
+        rows = [r for r in rows if r.get("latitude") and g20.contains(Point(float(r["longitude"]), float(r["latitude"])))]
+        # residential units per tax lot, from PLUTO, to express complaints per apartment
+        pl = soda("data.cityofnewyork.us", "64uk-42ks", f"{box} AND unitsres>0", select="bbl,unitsres")
+        units = {str(r["bbl"]).split(".")[0]: int(float(r["unitsres"])) for r in pl}
+        by = {}
+        for r in rows:
+            b = by.setdefault(r["building_id"], {"rows": [], "r": r})
+            b["rows"].append(r)
+        blds = []
+        for bid, b in by.items():
+            rr, r0 = b["rows"], b["r"]
+            apt = Counter(x.get("apartment") for x in rr if x.get("apartment") not in (None, "", "BLDG"))
+            top_apt, top_n = apt.most_common(1)[0] if apt else (None, 0)
+            rep = Counter((x.get("apartment"), x.get("minor_category")) for x in rr)
+            u = units.get(str(r0.get("bbl") or "").split(".")[0])
+            blds.append({"id": bid, "lat": round(float(r0["latitude"]), 5), "lon": round(float(r0["longitude"]), 5),
+                         "addr": f"{r0.get('house_number', '')} {r0.get('street_name', '')}".strip().title(),
+                         "n": len(rr), "complaints": len({x["complaint_id"] for x in rr}), "units": u,
+                         "heat": sum(x.get("major_category") == "HEAT/HOT WATER" for x in rr),
+                         "open": sum(x.get("problem_status") == "OPEN" for x in rr),
+                         "repeats": sum(1 for k, c in rep.items() if c >= 3),
+                         "top_apt": top_apt, "top_apt_share": round(100 * top_n / len(rr)) if top_n else 0,
+                         "cats": Counter(x.get("major_category") for x in rr).most_common(4)})
+        blds.sort(key=lambda b: -b["n"])
+        # compact form for the page: one array per building, problem categories as short codes
+        cat_names = [c for c, _ in Counter(r.get("major_category") for r in rows).most_common()]
+        cols = ["id", "lat", "lon", "addr", "n", "complaints", "units", "heat", "open", "repeats", "top_apt", "top_apt_share", "cats"]
+        out["hpd"] = {"cols": cols, "cat_names": cat_names,
+                      "rows": [[b[c] if c != "cats" else [[cat_names.index(k), v] for k, v in b["cats"]] for c in cols] for b in blds]}
+        tract_n = {}
+        acs_js = DATA / "acs_static.js"
+        if acs_js.exists():
+            src = acs_js.read_text()
+            T = json.loads(src[src.index("{"):src.index(";\nwindow.ORIGINS")])
+            shapes = [(f["properties"]["tract"], shape(f["geometry"])) for f in T["features"]]
+            for r in rows:
+                pt = Point(float(r["longitude"]), float(r["latitude"]))
+                for tr, sh in shapes:
+                    if sh.contains(pt):
+                        tract_n[tr] = tract_n.get(tr, 0) + 1
+                        break
+        total = sum(b["n"] for b in blds)
+        try:
+            nocoord = int(jfetch("https://data.cityofnewyork.us/resource/ygpa-z7cr.json?" + urllib.parse.urlencode({"$select": "count(*)",
+                "$where": f"borough='BROOKLYN' AND latitude IS NULL AND received_date>='{since}T00:00:00'"}))[0]["count"])
+            bk = int(jfetch("https://data.cityofnewyork.us/resource/ygpa-z7cr.json?" + urllib.parse.urlencode({"$select": "count(*)",
+                "$where": f"borough='BROOKLYN' AND received_date>='{since}T00:00:00'"}))[0]["count"])
+        except Exception:
+            nocoord = bk = None
+        out["hpd_stats"] = {"since": since, "through": max(r["received_date"] for r in rows)[:10], "problems": total,
+                            "complaints": len({r["complaint_id"] for r in rows}), "buildings": len(blds),
+                            "by_category": Counter(r.get("major_category") for r in rows).most_common(10), "tract_problems": tract_n,
+                            "brooklyn_problems": bk, "brooklyn_missing_coords": nocoord}
+        step(f"   HPD complaints: {total} problems in {len(blds)} buildings since {since}")
+    except Exception as e:
+        keep("hpd", e)
+        out["hpd_stats"] = previous.get("hpd_stats")
+
     # --- the publisher's own record for each dataset: official name, agency, and when it last changed.
     # Shown on the page so students can judge freshness themselves and go straight to the original.
     out["_meta"] = {}
     for dom, ds in [("data.cityofnewyork.us", "y76i-bdw7"), ("data.cityofnewyork.us", "5ucz-vwe8"), ("data.cityofnewyork.us", "pztn-9bne"),
                     ("data.ny.gov", "39hk-dx4f"), ("data.ny.gov", "s692-irgq"), ("data.ny.gov", "bzwk-3hb4"),
                     ("data.cityofnewyork.us", "6z8x-wfk4"), ("data.cityofnewyork.us", "ji82-xba5"), ("data.ny.gov", "9a8c-vfzj"),
-                    ("data.cityofnewyork.us", "5crt-au7u")]:
+                    ("data.cityofnewyork.us", "5crt-au7u"), ("data.cityofnewyork.us", "ygpa-z7cr"),
+                    ("data.cityofnewyork.us", "64uk-42ks")]:
         try:
             m = jfetch(f"https://{dom}/api/views/{ds}.json", timeout=60)
             upd = m.get("rowsUpdatedAt")
@@ -347,7 +414,7 @@ def bake():
     for name in ("boundary", "trends", "people", "turf", "news", "headline", "member", "maplayers", "legislation"):
         bundle[name] = json.load(open(DATA / f"{name}.json"))
     with open(DATA / "portal_data.js", "w") as fh:
-        fh.write("window.PORTAL_DATA = " + json.dumps(bundle) + ";")
+        fh.write("window.PORTAL_DATA = " + json.dumps(bundle, separators=(",", ":")) + ";")
 
 if __name__ == "__main__":
     def step(msg):

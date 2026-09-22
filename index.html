@@ -76,6 +76,16 @@ main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:14px 28p
 .src dt{color:var(--muted);font-size:12.5px} .src dd{margin:0}
 .src .cav{margin:4px 0 0;padding:6px 9px;background:var(--warn-bg);border-radius:6px}
 .src.base h4{color:var(--muted);font-weight:600}
+.hpdpanel{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1.15fr);gap:18px;margin-top:12px;
+  border-top:1px solid var(--grid);padding-top:10px;font-size:13px}
+@media(max-width:900px){.hpdpanel{grid-template-columns:1fr}}
+.hpdpanel h3{margin:0 0 3px;font-size:13.5px}
+.hpdpanel canvas{max-height:230px}
+.hpdpanel input[type=range]{width:100%;margin:6px 0 2px}
+.hpdpanel .summary{color:var(--ink2);margin:4px 0 10px}
+.hpdrank{margin:6px 0 0;padding-left:22px}
+.hpdrank li{margin:0 0 3px;cursor:pointer} .hpdrank li:hover{color:var(--s1)}
+.hpdrank .m{color:var(--muted);font-size:12px}
 .bars{display:grid;grid-template-columns:max-content 1fr max-content;gap:5px 10px;align-items:center;font-size:13px}
 .bars .bar{height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
 .bars .val{color:var(--ink2);font-variant-numeric:tabular-nums;font-size:12.5px}
@@ -179,6 +189,7 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
       <div class="mapcol">
         <div id="map"></div>
         <div class="maplegend" id="mapLegend"></div>
+        <div id="viewExtra" hidden></div>
       </div>
     </div>
     <details class="about" id="mapAboutBox" open>
@@ -458,6 +469,78 @@ function cdLayer(){
 }
 
 const n = a => (a&&a.length)||0;
+
+// ---------------- tenant complaints to HPD (last 12 months)
+const HS = ML.hpd_stats || {};
+const HPD = (ML.hpd && ML.hpd.rows) ? ML.hpd.rows.map(r=>Object.fromEntries(ML.hpd.cols.map((c,i)=>[c,r[i]]))) : [];
+if (window.TRACTS && HS.tract_problems){
+  TRACTS.features.forEach(f=>{ const p=f.properties, k=HS.tract_problems[p.tract]||0;
+    p.hpd_rate = (p.renter_hh && p.renter_hh>=100) ? Math.round(100*k/p.renter_hh) : null; });
+  MEASURES.hpd_rate = {label:'Tenant complaints per 100 renter households', breaks:[25,50,75,100], f:v=>String(v)};
+}
+const PEOPLE_KEYS = Object.keys(MEASURES).filter(k=>k!=='hpd_rate');
+const HPD_COLOR = '#c2410c';
+const hpdR = b => 2 + Math.sqrt(b.n)*0.55;
+const hpdCsv = b => `https://data.cityofnewyork.us/resource/ygpa-z7cr.csv?building_id=${b.id}&$limit=5000&$where=` +
+  encodeURIComponent(`received_date>='${HS.since}T00:00:00'`);
+function hpdPopup(b){
+  const cats = b.cats.map(([c,k])=>`${(ML.hpd.cat_names[c]||'').toLowerCase()} ${k}`).join(', ');
+  return `<b>${b.addr}</b><br>${fmt(b.n)} problems in ${fmt(b.complaints)} complaints, ${mdY(HS.since)}–${mdY(HS.through)}` +
+    (b.units ? `<br>${fmt(b.units)} apartments · ${(b.n/b.units).toFixed(1)} problems per apartment` : '<br>unit count not on file') +
+    `<br>Most common: ${cats}` +
+    (b.top_apt_share>=40 ? `<br><b>One apartment (${b.top_apt}) filed ${b.top_apt_share}% of these</b>` : '') +
+    (b.repeats ? `<br>${b.repeats} times the same apartment reported the same problem 3+ times` : '') +
+    (b.open ? `<br>${b.open} still open` : '') +
+    `<br><a href="https://hpdonline.nyc.gov/hpdonline/building/${b.id}" target="_blank">HPD's page for this building ↗</a>` +
+    ` · <a href="${hpdCsv(b)}" target="_blank">raw records (CSV) ↗</a>`;
+}
+const hpdGroup = L.layerGroup();
+let hpdPct = 50, hpdSort = 'n', hpdChart = null;
+const HPD_TOTAL = HPD.reduce((a,b)=>a+b.n,0);
+function hpdCut(pct){ let run=0, k=0; for(const b of HPD){ if(run>=HPD_TOTAL*pct/100) break; run+=b.n; k++; } return k; }
+function hpdDraw(){
+  const k = hpdCut(hpdPct); hpdGroup.clearLayers();
+  HPD.slice(0,k).slice().reverse().forEach(b=>L.circleMarker([b.lat,b.lon],{radius:hpdR(b),color:'#7c2d12',weight:1,fillColor:HPD_COLOR,fillOpacity:.55})
+    .bindPopup(hpdPopup(b)).addTo(hpdGroup));
+  document.getElementById('hpdPctLbl').textContent = hpdPct+'%';
+  document.getElementById('hpdSummary').innerHTML = `<b>${fmt(k)} buildings</b>, ${(100*k/HPD.length).toFixed(k/HPD.length<.1?1:0)}% of the ${fmt(HPD.length)} ` +
+    `with any complaint, account for ${hpdPct}% of the ${fmt(HPD_TOTAL)} problems reported. They are the dots on the map.`;
+  if(hpdChart){ hpdChart.data.datasets[1].data=[{x:100*k/HPD.length,y:hpdPct}]; hpdChart.update('none'); }
+}
+function hpdRank(){
+  const S = {n:['Most problems', b=>b.n, b=>`${fmt(b.n)} problems`],
+    per:['Per apartment', b=>b.units>=6 ? b.n/b.units : -1, b=>`${(b.n/b.units).toFixed(1)} per apartment (${b.units} apts)`],
+    repeats:['Most repeated', b=>b.repeats, b=>`${b.repeats} repeated apartment-problems`],
+    heat:['Heat & hot water', b=>b.heat, b=>`${fmt(b.heat)} heat/hot water`]};
+  document.getElementById('hpdSorts').innerHTML = Object.entries(S).map(([k,[l]])=>`<span class="chip ${k===hpdSort?'on':''}" data-s="${k}">${l}</span>`).join('');
+  document.getElementById('hpdSorts').querySelectorAll('.chip').forEach(el=>el.onclick=()=>{hpdSort=el.dataset.s; hpdRank();});
+  const [ ,key,lab] = S[hpdSort];
+  const top = HPD.slice().sort((a,b)=>key(b)-key(a)).slice(0,12);
+  const ol = document.getElementById('hpdRank');
+  ol.innerHTML = top.map((b,i)=>`<li data-i="${HPD.indexOf(b)}">${b.addr} <span class="m">${lab(b)}${b.top_apt_share>=40?` · one apartment filed ${b.top_apt_share}%`:''}</span></li>`).join('');
+  ol.querySelectorAll('li').forEach(el=>el.onclick=()=>{ const b=HPD[+el.dataset.i];
+    map.setView([b.lat,b.lon],17); L.popup().setLatLng([b.lat,b.lon]).setContent(hpdPopup(b)).openOn(map); });
+}
+function hpdPanel(el){
+  el.innerHTML = `<div class="hpdpanel"><div><h3>How concentrated are complaints?</h3>
+      <div class="legend">Buildings ranked from most to fewest problems (across) against their cumulative share of all problems (up)</div>
+      <canvas id="hpdCurve"></canvas></div>
+    <div><h3>Show the buildings that account for <span id="hpdPctLbl"></span> of problems</h3>
+      <input type="range" id="hpdSlider" min="5" max="100" step="5" value="${hpdPct}" aria-label="Share of problems">
+      <div class="summary" id="hpdSummary"></div>
+      <h3>Outliers, depending on how you measure</h3><div class="chips" id="hpdSorts" style="margin:4px 0 2px"></div>
+      <ol class="hpdrank" id="hpdRank"></ol></div></div>`;
+  let run=0; const pts=[{x:0,y:0}];
+  HPD.forEach((b,i)=>{ run+=b.n; if(i%5===0||i===HPD.length-1) pts.push({x:100*(i+1)/HPD.length, y:100*run/HPD_TOTAL}); });
+  hpdChart = new Chart(document.getElementById('hpdCurve'),{type:'line',
+    data:{datasets:[{data:pts,borderColor:HPD_COLOR,borderWidth:2,pointRadius:0,fill:false,parsing:false},
+      {data:[],type:'scatter',pointRadius:6,pointBackgroundColor:HPD_COLOR,pointBorderColor:'#fff',pointBorderWidth:2}]},
+    options:{animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` top ${c.parsed.x.toFixed(1)}% of buildings → ${c.parsed.y.toFixed(0)}% of problems`}}},
+      scales:{x:{type:'linear',min:0,max:100,title:{display:true,text:'% of buildings with any complaint'},ticks:{callback:v=>v+'%'},grid:{color:GRID}},
+              y:{min:0,max:100,title:{display:true,text:'% of all problems'},ticks:{callback:v=>v+'%'},grid:{color:GRID}}}}});
+  document.getElementById('hpdSlider').oninput = e=>{ hpdPct=+e.target.value; hpdDraw(); };
+  hpdDraw(); hpdRank();
+}
 const yr = iso => (iso||'').slice(0,4);
 const mY = iso => { const p=(iso||'').split('-'); return p.length>=2 ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+p[0] : iso; };
 const META = ML._meta || {};
@@ -465,7 +548,7 @@ const META = ML._meta || {};
 // ---------------- sources: one entry per dataset. Every view lists the ones it draws on.
 const ACS_TABLE = {income:['B19013','Median household income'], rent:['B25064','Median gross rent'], pct_black:['B03002','Hispanic or Latino origin by race'],
   pct_white:['B03002','Hispanic or Latino origin by race'], pct_hisp:['B03002','Hispanic or Latino origin by race'], pct_foreign_born:['B05002','Place of birth by nativity'],
-  pct_renters:['B25003','Tenure (owner or renter)'], pct_poverty:['B17001','Poverty status in the past 12 months'], pct_snap:['B22003','Receipt of food stamps/SNAP']};
+  pct_renters:['B25003','Tenure (owner or renter)'], hpd_rate:['B25003','Renter households (the denominator)'], pct_poverty:['B17001','Poverty status in the past 12 months'], pct_snap:['B22003','Receipt of food stamps/SNAP']};
 const openData = (id, fallbackName, fallbackAgency) => { const m=META[id]||{}; return {
   title: m.name || fallbackName, pub: (m.agency||fallbackAgency) + ' · ' + (m.url||'').replace('https://','').split('/')[0],
   url: m.url || '', updated: m.updated }; };
@@ -512,6 +595,15 @@ const SOURCES = {
     cav:'Segments are cut at the district line, so a route shown here usually continues well beyond it.'}),
   citibike: () => ({title:'Citi Bike station information (live feed)', pub:'Lyft / Citi Bike, GBFS feed', url:'https://citibikenyc.com/system-data',
     row:'One docking station', onmap:`${n(ML.citibike)} docks`, cover:`As of ${(ML._prov||{}).retrieved||''}`, cav:''}),
+  hpd: () => ({...openData('ygpa-z7cr','Housing Maintenance Code Complaints and Problems','Department of Housing Preservation and Development (HPD)'),
+    row:'One problem reported in a tenant\'s complaint to HPD, usually through 311. A single complaint can list several problems.',
+    cover:`${mdY(HS.since)} to ${mdY(HS.through)} (the last 12 months)`,
+    onmap:`${fmt(HS.problems)} problems in ${fmt(HS.complaints)} complaints, from ${fmt(HS.buildings)} buildings`,
+    missing: HS.brooklyn_missing_coords!=null ? `${fmt(HS.brooklyn_missing_coords)} of ${fmt(HS.brooklyn_problems)} Brooklyn records in this period have no coordinates` : '',
+    extra:[['Verified conditions are a separate file', 'https://data.cityofnewyork.us/d/wvxf-dwi5', 'Housing Maintenance Code Violations']],
+    cav:'A complaint is a tenant\'s report, not a verified violation; HPD\'s inspection findings are in the violations file linked above. One persistent tenant can file hundreds of complaints, so check whether a single apartment dominates (each building\'s popup says). Heat complaints pile up in heat season, Oct. 1 to May 31. Look at the status descriptions in the raw records before reading "closed" as "fixed."'}),
+  pluto: () => ({...openData('64uk-42ks','Primary Land Use Tax Lot Output (PLUTO)','Department of City Planning (DCP)'),
+    row:'One tax lot; used here only for its count of apartments', cav:'A tax lot can hold more than one building, so a per-apartment rate can be off for complexes.'}),
   tracts: () => ({title:'Census tract boundaries', pub:'U.S. Census Bureau, cartographic boundary files 2023',
     url:'https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html',
     row:'One census tract, usually 2,000 to 7,000 people', onmap: window.TRACTS ? `${TRACTS.features.length} tracts at least 2% inside the district, trimmed to its lines` : '',
@@ -548,7 +640,10 @@ const VIEWS = [
     legend:'The eight community districts overlapping SD-20. <b>Click one</b> to jump to its needs below.'},
   {group:'Boundaries', id:'precincts', label:'Police precincts', layers:[precinctLayer(true)], src:['precincts'],
     legend:'Police precincts, each shaded and numbered.'},
-  ...Object.keys(MEASURES).map(k=>({group:'People', note:'census tracts shaded by', id:'tract-'+k, label:MEASURES[k].label.replace(/^% /,'Share '), choro:k, src:['acs:'+k,'tracts']})),
+  ...PEOPLE_KEYS.map(k=>({group:'People', note:'census tracts shaded by', id:'tract-'+k, label:MEASURES[k].label.replace(/^% /,'Share '), choro:k, src:['acs:'+k,'tracts']})),
+  {group:'Housing', id:'hpd', label:'Tenant complaints, by building', muted:true, layers:[hpdGroup], src:['hpd','pluto'], extra:hpdPanel,
+    legend:`Each dot is a building; size = problems reported to HPD, ${mdY(HS.since)}–${mdY(HS.through)}. Use the slider below to find the buildings that drive the total.`},
+  ...(MEASURES.hpd_rate ? [{group:'Housing', id:'tract-hpd_rate', label:'Tenant complaints, by census tract', choro:'hpd_rate', src:['hpd','acs:hpd_rate','tracts']}] : []),
   {group:'Housing', id:'evictions', label:`Evictions, ${yr(ES.first)}–${yr(ES.data_through)}`, muted:true, layers:[evictionsLayer], src:['evictions'],
     legend:`Each dot is a residential eviction carried out by a city marshal <b style="color:#c0392b">●</b> (${fmt(n(ML.evictions))})`},
   {group:'Safety', id:'shootings', label:`Shootings, ${yr(SS.first)}–${yr(SS.data_through)}`, muted:true, layers:[precinctLayer(false), shootingsLayer], src:['shootings','precincts'],
@@ -576,6 +671,7 @@ function setView(id){
   v.layers.forEach(l=>{ l.addTo(map); shownLayers.push(l); });
   layer.bringToFront();
   legEl.innerHTML = v.choro ? tractLegend() : v.legend;
+  const ex=document.getElementById('viewExtra'); ex.hidden=!v.extra; if(v.extra){ if(!ex.dataset.built||ex.dataset.built!==v.id){ v.extra(ex); ex.dataset.built=v.id; } }
   navEl.querySelectorAll('button').forEach(el=>el.classList.toggle('on', el.dataset.v===v.id));
   // what every view shares (district lines, street map) up top, then each dataset behind this view
   aboutEl.innerHTML = srcBlock(SOURCES.district(), true) + srcBlock(SOURCES.basemap(), true) +

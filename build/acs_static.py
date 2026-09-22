@@ -85,7 +85,8 @@ for _, row in t.iterrows():
                                  "pct_black": pct("r_black", "r_tot"), "pct_white": pct("r_white", "r_tot"),
                                  "pct_hisp": pct("r_hisp", "r_tot"), "pct_asian": pct("r_asian", "r_tot"),
                                  "pct_foreign_born": pct("fb", "fb_tot"), "pct_renters": pct("renters", "ten_tot"),
-                                 "pct_poverty": pct("poor", "pov_tot"), "pct_snap": pct("snap", "hh_tot")}})
+                                 "pct_poverty": pct("poor", "pov_tot"), "pct_snap": pct("snap", "hh_tot"),
+                                 "renter_hh": v["renters"]}})
 tracts = {"type": "FeatureCollection", "features": feats,
           "_prov": {"source": f"U.S. Census Bureau, American Community Survey 5-year estimates, {VINTAGE}, by census tract",
                     "url": f"https://api.census.gov/data/{YEAR}/acs/acs5", "retrieved": NOW,

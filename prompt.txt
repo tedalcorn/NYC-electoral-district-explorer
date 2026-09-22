@@ -60,6 +60,14 @@ This static, human-checked content is embedded in index.html (const CDS) rather 
 since it changes about once a year, not daily.
 
 REVISION LOG (prune as it grows — keep it short)
+- 2026-09-22  Map redesigned as a tool for finding data and going to the original: one grouped list of views
+              (Boundaries / People / Housing / Safety / Services / Getting around) replaces the theme chips and
+              the separate "Shade by" row; each view is named for exactly what it shows. Under the map, one
+              source block per dataset: publisher, link to the original, what one record is, dates, the
+              publisher's last-update date, what's on and off the map, caveats. New: tenant complaints to HPD
+              (last 12 months) by building, with a concentration curve, a slider to isolate the buildings that
+              drive the total, and outlier rankings (total, per apartment, repeated, heat); and by census tract
+              per 100 renter households. Poverty and SNAP added as tract views.
 - 2026-09-21  After the students' district walks: three map themes added. "Income & demographics" shades
               census tracts (ACS 5-year) by one measure at a time, with margins of error in the hover;
               "Schools & early ed" (NYC Facilities Database: schools by sector, day care and pre-K,
