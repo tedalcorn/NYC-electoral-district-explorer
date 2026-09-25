@@ -32,9 +32,9 @@ WHAT THE PAGE CONTAINS
 7. Resources — primary-source portals for going deeper.
 
 HOW IT'S BUILT
-A single Python script (build/build_portal.py) fetches each source, writes one JSON file per
-pane (each with a provenance block), and bakes them into data/portal_data.js so the page runs
-from a static file or GitHub Pages. index.html is presentation only.
+build/district.py <code> fetches each source for one district, writes one JSON file per pane (each
+with a provenance block) into data/<code>/, and bakes them into data/<code>/portal_data.js so the page
+runs from a static file or GitHub Pages. index.html is presentation only and is shared by every district.
 
 COLLECTING COMMUNITY-DISTRICT NEEDS (reproducible from public sources — no private email needed)
 Everything below is public; an agent can assemble it from web search and open data alone.
@@ -60,6 +60,12 @@ This static, human-checked content is embedded in index.html (const CDS) rather 
 since it changes about once a year, not daily.
 
 REVISION LOG (prune as it grows — keep it short)
+- 2026-09-25  Made multi-district. One shared index.html; ?d=<code> loads data/<code>/; sticky picker bar.
+              build/district.py <code> builds any NY Senate or Assembly district that touches the city
+              from a one-line config (districts/<code>.json); member name, portrait, bills, Census,
+              boundaries, overlaps, community boards, news searches and every map layer are automatic.
+              Hand-compiled facts (elections, priorities, committees, board needs) live in the config's
+              "curated" block, not in code. Pilots: SD-20, AD-43, SD-25.
 - 2026-09-22  Every tract and point on the map has a hover label naming it by its ID in the source (tract
               GEOID, NYPD incident key, state license number, HPD building ID, MTA station ID) and the value
               being shown; rates show their numerator and denominator. Evictions now shown as a rate per 1,000

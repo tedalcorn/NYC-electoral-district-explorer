@@ -232,7 +232,7 @@ def fetch_items(step=print, queries=NEWS_QUERIES):
             step(f"   {q[:70]} FAILED ({e})")
     return items
 
-def build_news(items, now_str, queries=NEWS_QUERIES):
+def build_news(items, now_str, queries=NEWS_QUERIES, code="SD-20", member="Sen. Myrie", hoods=None):
     """items: raw dicts from fetch_items. Returns the news.json payload, or None if nothing usable."""
     now = datetime.now(timezone.utc)
     articles, seen, excluded = [], set(), Counter()
@@ -275,7 +275,7 @@ def build_news(items, now_str, queries=NEWS_QUERIES):
         "_prov": {
             "source": "Google News RSS search",
             "url": "https://news.google.com/rss/search?q=<query>", "retrieved": now_str,
-            "method": (f"{len(queries)} searches: one per SD-20 neighborhood, one for Sen. Myrie, and six that pair the "
+            "method": (f"{len(queries)} searches: one per {code} neighborhood, one for {member}, and six that pair the "
                        f"neighborhoods with a subject (housing, schools, transit, health, business, local government). "
                        f"Of {n_recent} results from the last {CUTOFF_DAYS} days, {n_ex} from {len(excluded)} sources that are "
                        f"not news organizations (apps such as Citizen, government and corporate press offices, listings "
@@ -286,7 +286,7 @@ def build_news(items, now_str, queries=NEWS_QUERIES):
                        f"shown under the earliest report with the other outlets linked beside it."),
             "caveats": ("Google News is relevance-ranked and caps each search near 100 results, so this is a broad sample, "
                         "not a census of local coverage. A neighborhood name-match does not guarantee the story is inside "
-                        "SD-20. Story grouping and topic tags are automated word-matching and will sometimes be wrong. "
+                        f"{code}. Story grouping and topic tags are automated word-matching and will sometimes be wrong. "
                         "The outlet list is a judgment call; a legitimate outlet missing from it is dropped until added."),
         },
     }

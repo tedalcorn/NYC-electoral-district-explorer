@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>District Portal — NY Senate District 20</title>
+<title>NYC Electoral District Explorer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script src="data/portal_data.js"></script>
-<script src="data/community_districts.js"></script>
-<script src="data/acs_static.js"></script>
+<script src="data/districts.js"></script>
+<script>
+// One page for every district. ?d=<code> picks which district's data files to load (default SD-20).
+(function(){
+  var list = window.DISTRICTS || [], want = new URLSearchParams(location.search).get('d');
+  var d = list.some(function(x){ return x.code === want; }) ? want : (list.some(function(x){ return x.code === 'SD-20'; }) ? 'SD-20' : (list[0] || {}).code);
+  window.DISTRICT_CODE = d;
+  ['portal_data.js', 'community_districts.js', 'acs_static.js'].forEach(function(f){
+    document.write('<script src="data/' + d + '/' + f + '"><\/script>');
+  });
+})();
+</script>
 <style>
 :root{
   --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
@@ -23,6 +32,11 @@
 }}
 *{box-sizing:border-box} [hidden]{display:none!important} body{margin:0;background:var(--page);color:var(--ink);
   font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.topbar{position:sticky;top:0;z-index:1000;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:8px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13.5px}
+.topbar .brand{font-weight:700;color:var(--ink);white-space:nowrap}
+.topbar select{font:inherit;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--page);color:var(--ink);max-width:100%}
+.topbar .n{color:var(--muted)}
 header{padding:22px 28px 14px;max-width:1400px}
 .ident{display:flex;align-items:center;gap:14px}
 .ident img{width:60px;height:60px;border-radius:50%;object-fit:cover;object-position:50% 20%;
@@ -157,10 +171,15 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
 </style>
 </head>
 <body>
+<div class="topbar">
+  <span class="brand">NYC Electoral District Explorer</span>
+  <label>District: <select id="districtPick" aria-label="Choose a district"></select></label>
+  <span class="n" id="districtCount"></span>
+</div>
 <header>
   <div class="ident">
-    <img id="memberPhoto" alt="Official portrait of Sen. Zellnor Myrie" hidden>
-    <h1>District Portal — NY Senate District 20 <small>Sen. Zellnor Myrie · Central Brooklyn</small></h1>
+    <img id="memberPhoto" alt="Official portrait" hidden>
+    <h1 id="pageTitle"></h1>
   </div>
   <div class="banner">This is a pilot dashboard built with AI assistance. It is meant to quickly collate
   available information on the district, not as the source of that information. Treat each piece of
@@ -204,7 +223,7 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
     <p class="sub">American Community Survey (U.S. Census Bureau), 5-year estimates, 2020–2024</p>
     <div class="stats" id="stats"></div>
     <details class="prov"><summary>Source &amp; caveats</summary>
-      <div>Source: <a href="https://censusreporter.org/profiles/61000US36020-state-senate-district-20-ny/" target="_blank">Census Reporter, SD-20 profile</a> (ACS 2020–24 5-year); citywide comparison from the Census API, place "New York city, NY", same vintage.</div>
+      <div>Source: <a id="crLink" href="#" target="_blank">Census Reporter, district profile</a> (ACS 2020–24 5-year); citywide comparison from the Census API, place "New York city, NY", same vintage.</div>
       <div class="cav">These are survey <b>estimates with margins of error</b> that this pane does not show. The charts below use the adjacent ACS vintage (2019–23), so small differences between panes are expected.</div>
     </details>
   </section>
@@ -215,14 +234,14 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
     <p class="sub">U.S. Census Bureau — American Community Survey (ACS), 5-year estimates</p>
     <div class="chartgrid">
       <div>
-        <h3>Race &amp; ethnicity — SD-20 vs NYC</h3>
-        <div class="legend"><i style="background:var(--s1)"></i>SD-20 <i style="background:var(--s2)"></i>NYC</div>
+        <h3>Race &amp; ethnicity — <span class="dcode"></span> vs NYC</h3>
+        <div class="legend"><i style="background:var(--s1)"></i><span class="dcode"></span> <i style="background:var(--s2)"></i>NYC</div>
         <canvas id="raceChart"></canvas>
         <details class="tbl"><summary>Table view (exact values)</summary><div id="raceTbl"></div></details>
       </div>
       <div>
-        <h3>Age structure — SD-20 vs NYC</h3>
-        <div class="legend"><i style="background:var(--s1)"></i>SD-20 <i style="background:var(--s2)"></i>NYC</div>
+        <h3>Age structure — <span class="dcode"></span> vs NYC</h3>
+        <div class="legend"><i style="background:var(--s1)"></i><span class="dcode"></span> <i style="background:var(--s2)"></i>NYC</div>
         <canvas id="ageChart"></canvas>
         <details class="tbl"><summary>Table view (exact values)</summary><div id="ageTbl"></div></details>
       </div>
@@ -262,23 +281,14 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
   <!-- COMMUNITY DISTRICTS -->
   <section class="pane c12">
     <h2>Community districts</h2>
-    <p class="sub">SD-20 spans eight community districts, ordered here by how much of each board falls inside
-    the district. Each files an annual Statement of Community District Needs; its own ranked priorities are
-    summarized below.</p>
+    <p class="sub" id="cdSub"></p>
     <div class="cdgrid" id="cdGrid"></div>
-    <details class="prov"><summary>Source &amp; caveats</summary>
-      <div>Neighborhoods, boards, and priorities from each board's <b>Statement of Community District
-      Needs</b> (FY2027 where posted) and the NYC Department of City Planning
-      <a href="https://communityprofiles.planning.nyc.gov/" target="_blank">Community Profiles</a>.
-      Compiled with the office of Sen. Myrie, retrieved 2026-08-03.</div>
-      <div class="cav">Priorities are each board's own framing, distilled — see the linked statement for
-      the full list. CB6 and CB7 have not posted a public statement (the link goes to the board).</div>
-    </details>
+    <details class="prov"><summary>Source &amp; caveats</summary><div id="cdProv"></div></details>
   </section>
 
   <!-- BACKGROUND ON MEMBER -->
   <section class="pane c6">
-    <h2>Background on Senator Myrie</h2>
+    <h2 id="memberH2">Background on the member</h2>
     <p class="sub" id="memberSub"></p>
     <div id="memberLinks" style="margin:0 0 6px;font-size:13.5px"></div>
     <div id="memberCommittees" class="sub" style="margin:0 0 4px"></div>
@@ -294,11 +304,11 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
   <!-- SHARED TURF -->
   <section class="pane c6">
     <h2>Who shares this turf</h2>
-    <p class="sub">Districts overlapping SD-20, by share of its area</p>
+    <p class="sub">Districts overlapping <span class="dcode"></span>, by share of its area</p>
     <div id="turfTables"></div>
     <details class="prov"><summary>Source &amp; caveats</summary>
       <div>Overlaps computed by geometric intersection of official boundaries (TIGER/NYC OpenData). Member names retrieved 2026-07-14 from <a href="https://council.nyc.gov/districts/" target="_blank">council.nyc.gov</a>, <a href="https://nyassembly.gov/mem/" target="_blank">nyassembly.gov</a>, and GovTrack.</div>
-      <div class="cav">Percentages are shares of SD-20's <b>area, not its population</b>, so a sparsely-populated overlap can look larger than it is. Offices change hands — confirm a name before relying on it.</div>
+      <div class="cav">Percentages are shares of the district's <b>area, not its population</b>, so a sparsely-populated overlap can look larger than it is. Offices change hands — confirm a name before relying on it.</div>
     </details>
   </section>
 
@@ -336,6 +346,21 @@ footer{padding:0 28px 44px;max-width:1400px;color:var(--muted);font-size:12.5px}
 
 <script>
 const D = window.PORTAL_DATA;
+const DIST = D.district || {code:'SD-20', title:'NY Senate District 20', member_title:'Sen.', member:'Zellnor Myrie', member_last:'Myrie', area:'Central Brooklyn', chamber:'senate', number:20};
+document.title = `${DIST.title} · NYC Electoral District Explorer`;
+document.getElementById('pageTitle').innerHTML = `${DIST.title} <small>${DIST.member_title} ${DIST.member}${DIST.area?' · '+DIST.area:''}</small>`;
+document.querySelectorAll('.dcode').forEach(el=>el.textContent=DIST.code);
+if (DIST.census_reporter) document.getElementById('crLink').href = DIST.census_reporter;
+{ // district picker: every district that has been built, senate first
+  const list = window.DISTRICTS || [], sel = document.getElementById('districtPick');
+  const grp = (ch, lbl) => { const g=document.createElement('optgroup'); g.label=lbl;
+    list.filter(x=>x.chamber===ch).forEach(x=>{ const o=document.createElement('option'); o.value=x.code;
+      o.textContent=`${x.title} · ${x.member}${x.area?' · '+x.area:''}`; o.selected=x.code===DIST.code; g.appendChild(o); });
+    if(g.children.length) sel.appendChild(g); };
+  grp('senate','State Senate'); grp('assembly','State Assembly');
+  sel.onchange = () => { const u=new URL(location); u.searchParams.set('d', sel.value); location.href=u; };
+  document.getElementById('districtCount').textContent = `${list.length} district${list.length===1?'':'s'} built so far`;
+}
 const SUGGEST_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeiUAMqU3D6PkhxsYIRT3utnS22Etsfg37Fot1qETmBzo28cw/viewform";  // Google Form for student suggestions
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const S1 = css('--s1'), S2 = css('--s2'), INK2 = css('--ink2'), GRID = css('--grid'), MUT = css('--muted');
@@ -436,11 +461,11 @@ const MEASURES = {
 };
 let measure = 'income', tractLayer = null;
 const shade = (m,v) => v==null ? NODATA : RAMP[MEASURES[m].breaks.filter(b=>v>=b).length];
-const geoid = t => { const [a,b='00']=String(t).split('.'); return '36047' + a.padStart(4,'0') + b.padEnd(2,'0'); };
+const geoid = p => p.geoid || (()=>{ const [a,b='00']=String(p.tract).split('.'); return '36047' + a.padStart(4,'0') + b.padEnd(2,'0'); })();  // GEOID from the build; the fallback is for old Brooklyn-only files
 function tractTip(p){
   const M=MEASURES[measure], v=p[measure];
   const val = v==null ? 'no estimate' : M.f(v) + (measure==='income'&&p.income_moe ? ` <span style="font-weight:400">± $${fmt(Math.round(p.income_moe/1000))}k</span>` : '');
-  return `<b>Census tract ${p.tract}</b> · GEOID ${geoid(p.tract)}<br>` +
+  return `<b>Census tract ${p.tract}</b> · GEOID ${geoid(p)}<br>` +
     `${M.label}: <b>${val}</b>` + (M.parts && v!=null ? `<br><span style="color:var(--muted)">${M.parts(p)}</span>` : '') +
     `<br>Population ${fmt(p.pop)}${p.share_in_district<98?` · ${p.share_in_district}% of the tract is inside the district`:''}`;
 }
@@ -457,8 +482,8 @@ function tractLegend(){
     `<span class="swatch" style="background:${NODATA}"></span>no estimate · hover a tract for all its figures`;
 }
 
-const CD_ORDER = [3,6,7,8,9,12,14,17];
-const CD_SHARE = {9:100,8:83.7,17:18.8,7:17.1,6:16.9,3:6.5,14:5.4,12:2.9}; // % of each CB inside SD-20 (projected, EPSG:2263)
+const CD_CARDS = (D.community && D.community.cards) || [];
+const CD_ORDER = CD_CARDS.map(c=>c.cd), CD_SHARE = Object.fromEntries(CD_CARDS.map(c=>[c.cd, c.share])), CD_BORO = Object.fromEntries(CD_CARDS.map(c=>[c.cd, c.boro]));
 const cbTip = L.tooltip({className:'bus-lbl', direction:'top', offset:[0,-8]});
 function cdLayer(){
   if(!window.CD_GEO) return null;
@@ -468,9 +493,9 @@ function cdLayer(){
       return {color:c, weight:2, fillColor:c, fillOpacity:.10};},
     onEachFeature:(f,l)=>{
       const cd=f.properties.cd;
-      l.bindTooltip('CB'+cd,{permanent:true,direction:'center',className:'precinct-lbl'});
+      l.bindTooltip('CB'+(f.properties.n||cd),{permanent:true,direction:'center',className:'precinct-lbl'});
       // the permanent "CB#" label occupies the layer's own tooltip, so the hover card is one shared tooltip that follows the cursor
-      const txt=`<b>Brooklyn Community Board ${cd}</b> · community district ${300+cd}<br>${CD_SHARE[cd]}% of the board is inside SD-20 · click for its needs`;
+      const txt=`<b>${CD_BORO[cd]||''} Community Board ${f.properties.n||cd}</b> · community district ${cd}<br>${CD_SHARE[cd]}% of the board is inside ${DIST.code} · click for its needs`;
       l.on('mouseover',e=>{ cbTip.setContent(txt).setLatLng(e.latlng).addTo(map); });
       l.on('mousemove',e=>cbTip.setLatLng(e.latlng));
       l.on('mouseout',()=>map.removeLayer(cbTip));
@@ -577,18 +602,18 @@ const openData = (id, fallbackName, fallbackAgency) => { const m=META[id]||{}; r
   title: m.name || fallbackName, pub: (m.agency||fallbackAgency) + ' · ' + (m.url||'').replace('https://','').split('/')[0],
   url: m.url || '', updated: m.updated }; };
 const SOURCES = {
-  district: () => ({title:'State Senate districts (2022 lines)', pub:'U.S. Census Bureau, TIGER/Line 2024',
+  district: () => ({title:`${DIST.chamber==='senate'?'State Senate':'State Assembly'} districts (2022 lines)`, pub:'U.S. Census Bureau, TIGER/Line 2024',
     url:'https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html',
     row:'One legislative district boundary', cover:'Lines used in the 2022 and 2024 elections',
     cav:'The district was redrawn in 2022. Anything measured before then describes somewhat different territory.'}),
   basemap: () => ({title:'Street map', pub:'OpenStreetMap contributors', url:'https://www.openstreetmap.org/copyright',
     row:'Streets, parks and place names drawn by volunteers', cav:''}),
   cb: () => ({...openData('5crt-au7u','Community Districts','Department of City Planning (DCP)'),
-    row:'One community district boundary', onmap:'The eight community districts that overlap SD-20. Click one to jump to its card.',
-    cav:'Community boards and the Senate district have different lines; the share of each board inside SD-20 is our calculation (shown on each card).'}),
+    row:'One community district boundary', onmap:`The ${CD_CARDS.length} community districts that overlap ${DIST.code}. Click one to jump to its card.`,
+    cav:`Community boards and the legislative district have different lines; the share of each board inside ${DIST.code} is our calculation (shown on each card).`}),
   precincts: () => ({...openData('y76i-bdw7','Police Precincts','Police Department (NYPD)'),
     row:'One police precinct boundary', onmap:`${n((ML.precincts||{}).features)} precincts touch the district`,
-    cav:'Precinct lines are not district lines. Several precincts fall only partly inside SD-20, so precinct-wide statistics mix in areas outside it.'}),
+    cav:`Precinct lines are not district lines. Several precincts fall only partly inside ${DIST.code}, so precinct-wide statistics mix in areas outside it.`}),
   shootings: () => ({...openData('5ucz-vwe8','Shootings (2006-Present)','Police Department (NYPD)'),
     extra:[['Victims file (fatal or not, number shot)', (META['pztn-9bne']||{}).url, (META['pztn-9bne']||{}).name||'Shooting Victims']],
     row:'One shooting incident. An incident can have several victims; it counts as fatal if any victim\'s death was classified a murder.',
@@ -660,9 +685,9 @@ const foodLegend = (()=>{ const z=((ML.food_stats||{}).sizes)||{}; const k=(fill
 
 const VIEWS = [
   {group:'Boundaries', id:'district', label:'District lines only', layers:[], src:[],
-    legend:'The 2022 lines of State Senate District 20. Pick a view on the left.'},
+    legend:`The 2022 lines of ${DIST.title}. Pick a view on the left.`},
   {group:'Boundaries', id:'cb', label:'Community boards', layers:[cdLayer()], src:['cb'],
-    legend:'The eight community districts overlapping SD-20. <b>Click one</b> to jump to its needs below.'},
+    legend:`The ${CD_CARDS.length} community districts overlapping ${DIST.code}. <b>Click one</b> to jump to its needs below.`},
   {group:'Boundaries', id:'precincts', label:'Police precincts', layers:[precinctLayer(true)], src:['precincts'],
     legend:'Police precincts, each shaded and numbered.'},
   ...PEOPLE_KEYS.map(k=>({group:'People', note:'census tracts shaded by', id:'tract-'+k, label:MEASURES[k].label.replace(/^% /,'Share '), choro:k, src:['acs:'+k,'tracts']})),
@@ -700,7 +725,7 @@ function setView(id){
   // what every view shares (district lines, street map) up top, then each dataset behind this view
   aboutEl.innerHTML = srcBlock(SOURCES.district(), true) + srcBlock(SOURCES.basemap(), true) +
     v.src.map(k=> k.startsWith('acs:') ? srcBlock(acsSource(k.slice(4))) : srcBlock(SOURCES[k]())).join('');
-  if(history.replaceState){ const u=new URL(location); u.searchParams.set('view', v.id); u.searchParams.delete('theme'); history.replaceState(null,'',u); }
+  if(history.replaceState){ const u=new URL(location); u.searchParams.set('view', v.id); u.searchParams.delete('theme'); if(window.DISTRICT_CODE) u.searchParams.set('d', window.DISTRICT_CODE); history.replaceState(null,'',u); }
 }
 setView(new URLSearchParams(location.search).get('view') || 'district');   // ?view=shootings links straight to a view
 
@@ -726,28 +751,29 @@ function tbl(el, head, rows){
 function grouped(id, labels, a, b, unit){
   new Chart(document.getElementById(id), {type:'bar',
     data:{labels, datasets:[
-      {label:'SD-20', data:a, backgroundColor:S1, borderRadius:4, categoryPercentage:.72, barPercentage:.9},
+      {label:DIST.code, data:a, backgroundColor:S1, borderRadius:4, categoryPercentage:.72, barPercentage:.9},
       {label:'NYC',   data:b, backgroundColor:S2, borderRadius:4, categoryPercentage:.72, barPercentage:.9}]},
     options:{plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}${unit}`}}},
       scales:{y:{beginAtZero:true, grid:{color:GRID}, ticks:{callback:v=>v+unit}}, x:{grid:{display:false}}}}});
 }
 if (D.people.race){
-  grouped('raceChart', D.people.race.labels, D.people.race.sd20_pct, D.people.race.nyc_pct, '%');
-  tbl('raceTbl', ['Group','SD-20','NYC'], D.people.race.labels.map((l,i)=>
-    [l, D.people.race.sd20_pct[i]+'%', D.people.race.nyc_pct[i]+'%']));
+  const rp = D.people.race.district_pct || D.people.race.sd20_pct;
+  grouped('raceChart', D.people.race.labels, rp, D.people.race.nyc_pct, '%');
+  tbl('raceTbl', ['Group',DIST.code,'NYC'], D.people.race.labels.map((l,i)=>
+    [l, rp[i]+'%', D.people.race.nyc_pct[i]+'%']));
 }
 if (D.people.age){
   grouped('ageChart', D.people.age.groups,
-    D.people.age.sd20_pct.map(v=>+v.toFixed(1)), D.people.age.nyc_pct.map(v=>+v.toFixed(1)), '%');
-  tbl('ageTbl', ['Ages','SD-20','NYC'], D.people.age.groups.map((g,i)=>
-    [g, D.people.age.sd20_pct[i].toFixed(1)+'%', D.people.age.nyc_pct[i].toFixed(1)+'%']));
+    (D.people.age.district_pct || D.people.age.sd20_pct).map(v=>+v.toFixed(1)), D.people.age.nyc_pct.map(v=>+v.toFixed(1)), '%');
+  tbl('ageTbl', ['Ages',DIST.code,'NYC'], D.people.age.groups.map((g,i)=>
+    [g, (D.people.age.district_pct || D.people.age.sd20_pct)[i].toFixed(1)+'%', D.people.age.nyc_pct[i].toFixed(1)+'%']));
 }
 
 // ---- trends with the 2022 boundary break (y starts at 0)
 function trend(id, series, fmtV){
   const yrs = D.trends.years, brk = yrs.indexOf(D.trends.boundary_break_year);
   new Chart(document.getElementById(id), {type:'line',
-    data:{labels:yrs, datasets:[{label:'SD-20', data:series, borderColor:S1, borderWidth:2,
+    data:{labels:yrs, datasets:[{label:DIST.code, data:series, borderColor:S1, borderWidth:2,
       pointRadius:4, pointBackgroundColor:S1, spanGaps:false,
       segment:{borderDash: c => (c.p1DataIndex === brk) ? [5,4] : undefined}}]},
     options:{plugins:{legend:{display:false}, tooltip:{callbacks:{
@@ -760,11 +786,12 @@ trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
 // ---- member background
 {
   const m = D.member;
+  document.getElementById('memberH2').textContent = `Background on ${DIST.member_title==='Sen.'?'Senator':DIST.member_title} ${DIST.member_last}`;
   if (m.photo){ const ph=document.getElementById('memberPhoto'); ph.src=m.photo; ph.hidden=false; }
   document.getElementById('memberSub').textContent = m.office;
   const link = (u,t) => `<a href="${u}" target="_blank">${t}</a>`;
   document.getElementById('memberLinks').innerHTML =
-    [link(m.wikipedia,'Wikipedia'), link(m.senate_page,'NY Senate page'),
+    [m.wikipedia ? link(m.wikipedia,'Wikipedia') : '', link(m.senate_page, DIST.chamber==='senate' ? 'NY Senate page' : 'NY Assembly page'),
      m.legislation_url ? link(m.legislation_url,'Sponsored bills') : ''].filter(Boolean).join(' · ');
   if (m.committees)
     document.getElementById('memberCommittees').innerHTML = '<b>Committees:</b> ' + m.committees.join(', ');
@@ -774,21 +801,21 @@ trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
     document.getElementById('memberSocial').innerHTML =
       '<b>Official accounts:</b> ' + off + (oth ? ` &nbsp;·&nbsp; also ${oth}` : '');
   }
-  const erows = m.elections.map(e=>{
+  const erows = (m.elections||[]).map(e=>{
     const opp = e.opp_votes!=null ? `${e.opp} — ${fmt(e.opp_votes)} (${e.opp_pct}%)` : e.opp;
     return `<tr><td>${e.year}</td><td>${e.race}</td><td>${fmt(e.self)} (${e.self_pct}%)</td>` +
            `<td>${e.result}</td></tr>`;
   }).join('');
-  document.getElementById('electionsTbl').innerHTML =
-    '<table><tr><th>Year</th><th>Race</th><th>Myrie</th><th>Result</th></tr>' + erows + '</table>' +
+  document.getElementById('electionsTbl').innerHTML = !m.elections ? `<div class="missing" style="font-size:12.5px;color:var(--muted);font-style:italic;border-left:2px dashed var(--border);padding:1px 0 1px 8px">Election history not yet compiled for this member.</div>` :
+    `<table><tr><th>Year</th><th>Race</th><th>${DIST.member_last}</th><th>Result</th></tr>` + erows + '</table>' +
     '<details class="tbl"><summary>Opponents &amp; notes</summary>' +
     m.elections.map(e=>`<div>${e.year} ${e.race}: ${e.opp_votes!=null?`${e.opp} — ${fmt(e.opp_votes)} (${e.opp_pct}%)`:e.opp}${e.note?' — '+e.note:''}</div>`).join('') +
     '</details>';
-  document.getElementById('priorities').innerHTML = m.priorities.map(([area,desc,url])=>
+  document.getElementById('priorities').innerHTML = !m.priorities ? '<p class="sub">Not yet compiled for this member.</p>' : m.priorities.map(([area,desc,url])=>
     `<p style="margin:0 0 7px"><b>${area}.</b> ${desc} <a href="${url}" target="_blank">source</a></p>`).join('');
   const mp = m._prov;
   document.getElementById('memberProv').innerHTML =
-    `Source: ${mp.source} (<a href="${mp.url}" target="_blank">district results</a>), retrieved ${mp.retrieved}. ${mp.method}` +
+    `Source: ${mp.source} (<a href="${mp.url}" target="_blank">link</a>), retrieved ${mp.retrieved}. ${mp.method}` +
     (m.photo_source ? ` Portrait: <a href="${m.photo_source}" target="_blank">New York State Senate</a>.` : '') +
     `<div class="cav">${mp.caveats}</div>`;
 }
@@ -837,12 +864,12 @@ trend('incChart', D.trends.median_hh_income, v=>'$'+v.toLocaleString());
 
 // ---- turf tables
 const T = D.turf, tt = document.getElementById('turfTables');
-[['congress','U.S. House'],['assembly','NY Assembly'],['council','NYC Council']].forEach(([k,label])=>{
+[['congress','U.S. House'],['senate','NY Senate'],['assembly','NY Assembly'],['council','NYC Council']].forEach(([k,label])=>{
   const rows = T[k]; if (!rows) return;
   tt.innerHTML += `<h3 style="font-size:13px;margin:10px 0 2px;color:var(--ink2)">${label}</h3>` +
-    '<table><tr><th>District</th><th>Member</th><th style="text-align:right">% of SD-20 area</th></tr>' +
+    `<table><tr><th>District</th><th>Member</th><th style="text-align:right">% of ${DIST.code} area</th></tr>` +
     rows.map(r=>`<tr><td>${r.district}</td><td><a href="${r.link}" target="_blank">${r.member||'look up →'}</a></td>` +
-      `<td class="num">${r.pct_of_sd20}%</td></tr>`).join('') + '</table>';
+      `<td class="num">${r.pct_of_district ?? r.pct_of_sd20}%</td></tr>`).join('') + '</table>';
 });
 
 // ---- country of birth + language at home (district-wide ACS)
@@ -861,53 +888,22 @@ if (window.ORIGINS){
   document.getElementById('originsProv').innerHTML = pv; document.getElementById('langProv').innerHTML = pv;
 } else { document.getElementById('originsPane').hidden = true; document.getElementById('langPane').hidden = true; }
 
-// ---- community districts (curated from each board's Statement of Community District Needs)
+// ---- community boards: overlap computed by the build; needs compiled by hand where available (D.community.cards)
 {
-  const p = n => `https://communityprofiles.planning.nyc.gov/brooklyn/${n}`;
-  const CDS = [
-    {cd:3, hoods:'Bedford-Stuyvesant', cb:'Community Board 3', pr:'Precincts 79, 81',
-      needs:['Affordable housing','Parks &amp; open space','Trash removal &amp; cleanliness',
-             'Stormwater fixes on the Marcy/Patchen/Howard flood corridors'],
-      note:'Among the worst open-space deficits in the city; 55% of renters are rent-burdened.',
-      stmt:['https://www.nyc.gov/site/brooklyncb3/index.page','Community Board 3 ↗']},
-    {cd:6, hoods:'Park Slope · Carroll Gardens · Gowanus · Red Hook', cb:'Community Board 6', pr:'Precinct 78',
-      needs:['Access to social services','Climate &amp; flood infrastructure','Transportation','Housing preservation'],
-      flag:'No public FY2027 statement posted — priorities from the office summary.',
-      stmt:['https://brooklyncb6.cityofnewyork.us/','Community Board 6 ↗']},
-    {cd:7, hoods:'Sunset Park · Windsor Terrace', cb:'Community Board 7', pr:'Precinct 72',
-      needs:['Affordable housing','Traffic volume','Neighborhood cleanliness'],
-      flag:'No public FY2027 statement posted — priorities from the office summary.',
-      stmt:['https://cbbrooklyn.cityofnewyork.us/cb7/','Community Board 7 ↗']},
-    {cd:8, hoods:'Crown Heights · Prospect Heights · Weeksville', cb:'Community Board 8', pr:'Precincts 77, 78',
-      needs:['Affordable housing','Senior services','Crime &amp; public safety','Reconstruct St. Johns Place'],
-      note:'Two decades of gentrification and displacement pressure.',
-      stmt:['https://www.brooklyncb8.org/docs/FY2027_Statement_BK08.pdf','Statement of needs (FY2027)']},
-    {cd:9, hoods:'Crown Heights · Prospect-Lefferts Gardens · Wingate · North Flatbush', cb:'Community Board 9', pr:'Precinct 71',
-      needs:['Affordable housing','Infrastructure resiliency','Trash removal &amp; cleanliness'],
-      note:'Wants zoning calibrated block by block to preserve existing housing, not spur demolition and warehousing.',
-      stmt:['https://www.nyc.gov/assets/brooklyncb9/downloads/pdf/2025/FY2026_Statement_BK09.pdf','Statement of needs (FY2026)']},
-    {cd:12, hoods:'Borough Park · Sunset Park', cb:'Community Board 12', pr:'Precinct 66',
-      needs:['Traffic congestion &amp; parking','Trash removal &amp; cleanliness','Affordable housing','Reconstruct 37th St (14th–15th Ave)'],
-      note:'Private schools — most of local enrollment — get no daily trash pickup.',
-      stmt:['https://www.nyc.gov/site/brooklyncb12/index.page','Community Board 12 ↗']},
-    {cd:14, hoods:'Flatbush · Midwood', cb:'Community Board 14', pr:'Precinct 70',
-      needs:['Park access — highest share citywide living over ¼ mile from a park','Affordable housing &amp; deteriorating housing stock','Health care &amp; services for seniors, homebound, and homeless residents','Rehabilitate Umma Park &amp; Campus Road Tot Lot; Newkirk Plaza pedestrian plaza'],
-      note:'Housing-code violations have climbed to 879 per 1,000 units (from 506 in 2010).',
-      stmt:['https://cb14brooklyn.com/wp-content/uploads/2025/12/FY2027_Statement-of-Community-District-Needs-and-CB-Requests_BK14.pdf','Statement of needs (FY2027)']},
-    {cd:17, hoods:'East Flatbush', cb:'Community Board 17', pr:'Precinct 67',
-      needs:['Affordable housing','Health care services','Roadway maintenance','Air-quality monitoring &amp; solar hubs'],
-      note:'Highest foreclosure rate in Brooklyn (10.5 per 1,000 small homes).',
-      stmt:['https://cbbrooklyn.cityofnewyork.us/cb17/wp-content/uploads/sites/6/2026/01/FY2027_Statement_BK17.pdf','Statement of needs (FY2027)']},
-  ];
-  CDS.sort((a,b)=>CD_SHARE[b.cd]-CD_SHARE[a.cd]);
-  document.getElementById('cdGrid').innerHTML = CDS.map(c=>
-    `<div class="cdcard" id="cd-${c.cd}"><h3>CB${c.cd} · ${c.hoods}</h3>` +
-    `<div class="cbline">${c.cb} · ${c.pr} · ${Math.round(CD_SHARE[c.cd])}% in district</div>` +
-    `<ul>${c.needs.map(x=>`<li>${x}</li>`).join('')}</ul>` +
-    (c.note?`<div class="stat">${c.note}</div>`:'') +
-    (c.flag?`<div class="missing">${c.flag}</div>`:'') +
-    `<div class="lk"><a href="${p(c.cd)}" target="_blank">Community profile</a>` +
-    `<a href="${c.stmt[0]}" target="_blank">${c.stmt[1]}</a></div></div>`).join('');
+  const cards = (D.community && D.community.cards) || [];
+  const compiled = cards.filter(c=>c.needs).length;
+  document.getElementById('cdSub').textContent = `${DIST.code} touches ${cards.length} community district${cards.length===1?'':'s'}, ordered by how much of each board falls inside it. ` +
+    (compiled ? `Each board files an annual Statement of Community District Needs; its own ranked priorities are summarized where compiled (${compiled} of ${cards.length}).`
+              : `Each board files an annual Statement of Community District Needs; none has been summarized for this district yet.`);
+  document.getElementById('cdGrid').innerHTML = cards.map(c=>
+    `<div class="cdcard" id="cd-${c.cd}"><h3>${c.boro} CB${c.n}${c.hoods?' · '+c.hoods:''}</h3>` +
+    `<div class="cbline">Community District ${c.cd}${c.precincts?' · '+c.precincts:''} · ${Math.round(c.share)}% in district</div>` +
+    (c.needs ? `<ul>${c.needs.map(x=>`<li>${x}</li>`).join('')}</ul>` : `<div class="missing">Needs statement not yet summarized.</div>`) +
+    (c.note?`<div class="stat">${c.note}</div>`:'') + (c.flag?`<div class="missing">${c.flag}</div>`:'') +
+    `<div class="lk"><a href="${c.profile}" target="_blank">Community profile</a>` +
+    (c.statement_url ? `<a href="${c.statement_url}" target="_blank">${c.statement_label||'Statement of needs'}</a>` : '') + `</div></div>`).join('');
+  const cp = (D.community && D.community._prov) || {};
+  document.getElementById('cdProv').innerHTML = `${cp.source||''} ${cp.method||''}<div class="cav">${cp.caveats||''}</div>`;
 }
 
 // ---- local news: reverse-chron list, filter by topic AND outlet
@@ -976,8 +972,8 @@ if (window.ORIGINS){
 // ---- resources
 const RES = [
   ['NYC Open Data', 'https://opendata.cityofnewyork.us/', 'the city\'s raw feeds — 311, NYPD complaints, HPD violations, DOB permits. Filter to the district yourself.'],
-  ['Census Reporter — SD-20', 'https://censusreporter.org/profiles/61000US36020-state-senate-district-20-ny/', 'ACS data for this exact geography, with margins of error shown.'],
-  ['NY Senate — bill &amp; vote search', 'https://www.nysenate.gov/legislation', 'what Myrie has sponsored and how he voted.'],
+  ['Census Reporter — ' + DIST.code, DIST.census_reporter || 'https://censusreporter.org/', 'ACS data for this exact geography, with margins of error shown.'],
+  ['NY Senate — bill &amp; vote search', 'https://www.nysenate.gov/legislation', `what ${DIST.member_last} has sponsored and voted on.`],
   ['NYC Council Legistar', 'https://legistar.council.nyc.gov/', 'hearings, testimony, and local laws.'],
   ['NYS BOE enrollment reports', 'https://elections.ny.gov/enrollment-state-senate-district', 'party registration by senate district, published twice a year.'],
   ['vote.nyc certified results', 'https://vote.nyc/page/election-results-summary', 'the official recaps behind any turnout claim.'],

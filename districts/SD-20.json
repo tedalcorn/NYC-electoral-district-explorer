@@ -1,0 +1,272 @@
+{
+ "code": "SD-20",
+ "chamber": "senate",
+ "number": 20,
+ "area": "Central Brooklyn",
+ "news_queries_extra": [
+  "\"Wingate\" Brooklyn",
+  "\"Ditmas Park\"",
+  "\"Prospect Park\" Brooklyn",
+  "\"Lefferts\" Brooklyn"
+ ],
+ "curated": {
+  "member": {
+   "wikipedia": "https://en.wikipedia.org/wiki/Zellnor_Myrie",
+   "committees": [
+    "Codes (Chair)",
+    "Children and Families",
+    "Consumer Protection",
+    "Elections",
+    "Health",
+    "Judiciary",
+    "Rules"
+   ],
+   "social": {
+    "official": [
+     {
+      "platform": "X",
+      "url": "https://x.com/SenatorMyrie"
+     },
+     {
+      "platform": "Instagram",
+      "url": "https://www.instagram.com/senatormyrie/"
+     },
+     {
+      "platform": "Facebook",
+      "url": "https://www.facebook.com/SenatorMyrie/"
+     }
+    ],
+    "other": [
+     {
+      "platform": "X (personal)",
+      "url": "https://x.com/zellnor4ny"
+     },
+     {
+      "platform": "Bluesky",
+      "url": "https://bsky.app/profile/zellnor.bsky.social"
+     }
+    ]
+   },
+   "elections": [
+    {
+     "year": 2018,
+     "race": "Democratic primary",
+     "result": "Won",
+     "self": 23784,
+     "self_pct": 53.9,
+     "opp": "Jesse Hamilton (incumbent)",
+     "opp_votes": 20266,
+     "opp_pct": 45.9
+    },
+    {
+     "year": 2018,
+     "race": "General",
+     "result": "Won",
+     "self": 73174,
+     "self_pct": 92.6,
+     "opp": "Jesse Hamilton",
+     "opp_votes": 5728,
+     "opp_pct": 7.3
+    },
+    {
+     "year": 2020,
+     "race": "General",
+     "result": "Won",
+     "self": 99491,
+     "self_pct": 97.3,
+     "opp": "Tucker Coburn (Libertarian)",
+     "opp_votes": 2570,
+     "opp_pct": 2.5
+    },
+    {
+     "year": 2022,
+     "race": "General",
+     "result": "Won",
+     "self": 80036,
+     "self_pct": 99.5,
+     "opp": "Effectively unopposed",
+     "opp_votes": null,
+     "opp_pct": null
+    },
+    {
+     "year": 2024,
+     "race": "General",
+     "result": "Won",
+     "self": 107498,
+     "self_pct": 99.3,
+     "opp": "Effectively unopposed",
+     "opp_votes": null,
+     "opp_pct": null
+    },
+    {
+     "year": 2025,
+     "race": "NYC Democratic mayoral primary",
+     "result": "Lost (6th of 11)",
+     "self": 10593,
+     "self_pct": 1.0,
+     "opp": "Zohran Mamdani (won)",
+     "opp_votes": null,
+     "opp_pct": null,
+     "note": "First-round votes; eliminated in round 2 of the ranked-choice tabulation."
+    }
+   ],
+   "priorities": [
+    [
+     "Voting rights",
+     "Lead sponsor of the John R. Lewis Voting Rights Act of New York (signed 2022).",
+     "https://www.nysenate.gov/legislation/bills/2021/S1046"
+    ],
+    [
+     "Criminal justice",
+     "Sponsor of the Clean Slate Act, sealing certain convictions after a waiting period (signed 2023).",
+     "https://www.cityandstateny.com/politics/2024/05/zellnor-myrie-may-run-mayor-strong-legislative-record/396413/"
+    ],
+    [
+     "Housing",
+     "Backed the 2019 Housing Stability and Tenant Protection Act and COVID-era eviction protections; work on deed theft and homeownership.",
+     "https://www.nysenate.gov/senators/zellnor-myrie/about"
+    ],
+    [
+     "Gun violence",
+     "Authored the Community Violence Intervention Act (2021) and a law treating certain illegal gun sales as a public nuisance.",
+     "https://en.wikipedia.org/wiki/Zellnor_Myrie"
+    ]
+   ],
+   "_prov": {
+    "source": "Elections: Wikipedia tables citing NYC/NYS BOE certified results, cross-checked against the NYC BOE ranked-choice tabulation (2025). Priorities: NY Senate bill pages, Governor's office, City & State.",
+    "url": "https://en.wikipedia.org/wiki/New_York%27s_20th_State_Senate_district",
+    "retrieved": "2026-07-15",
+    "method": "Compiled by web research, 2026-07-15. Vote totals combine a candidate's party and minor-party ballot lines where they appeared on more than one (NY fusion voting). Committees and social accounts verified 2026-07-15 against nysenate.gov; the expired campaign site zellnor.nyc was removed.",
+    "caveats": "2020/2022/2024 primaries were uncontested (no primary tally exists). In 2022 and 2024 Myrie ran effectively unopposed in the general. Committee assignments change by session — verify the current role on his Senate page before citing."
+   }
+  },
+  "office_note": "since January 2019",
+  "turf_names": {
+   "council": {
+    "35": "Crystal Hudson",
+    "36": "Chi Ossé",
+    "39": "Shahana Hanif",
+    "40": "Rita Joseph",
+    "41": "Darlene Mealy"
+   },
+   "congress": {
+    "8": "Hakeem Jeffries",
+    "9": "Yvette Clarke",
+    "10": "Daniel Goldman"
+   }
+  },
+  "community_boards": {
+   "303": {
+    "hoods": "Bedford-Stuyvesant",
+    "precincts": "Precincts 79, 81",
+    "needs": [
+     "Affordable housing",
+     "Parks &amp; open space",
+     "Trash removal &amp; cleanliness",
+     "Stormwater fixes on the Marcy/Patchen/Howard flood corridors"
+    ],
+    "note": "Among the worst open-space deficits in the city; 55% of renters are rent-burdened.",
+    "flag": null,
+    "statement_url": "https://www.nyc.gov/site/brooklyncb3/index.page",
+    "statement_label": "Community Board 3 ↗"
+   },
+   "306": {
+    "hoods": "Park Slope · Carroll Gardens · Gowanus · Red Hook",
+    "precincts": "Precinct 78",
+    "needs": [
+     "Access to social services",
+     "Climate &amp; flood infrastructure",
+     "Transportation",
+     "Housing preservation"
+    ],
+    "note": null,
+    "flag": "No public FY2027 statement posted — priorities from the office summary.",
+    "statement_url": "https://brooklyncb6.cityofnewyork.us/",
+    "statement_label": "Community Board 6 ↗"
+   },
+   "307": {
+    "hoods": "Sunset Park · Windsor Terrace",
+    "precincts": "Precinct 72",
+    "needs": [
+     "Affordable housing",
+     "Traffic volume",
+     "Neighborhood cleanliness"
+    ],
+    "note": null,
+    "flag": "No public FY2027 statement posted — priorities from the office summary.",
+    "statement_url": "https://cbbrooklyn.cityofnewyork.us/cb7/",
+    "statement_label": "Community Board 7 ↗"
+   },
+   "308": {
+    "hoods": "Crown Heights · Prospect Heights · Weeksville",
+    "precincts": "Precincts 77, 78",
+    "needs": [
+     "Affordable housing",
+     "Senior services",
+     "Crime &amp; public safety",
+     "Reconstruct St. Johns Place"
+    ],
+    "note": "Two decades of gentrification and displacement pressure.",
+    "flag": null,
+    "statement_url": "https://www.brooklyncb8.org/docs/FY2027_Statement_BK08.pdf",
+    "statement_label": "Statement of needs (FY2027)"
+   },
+   "309": {
+    "hoods": "Crown Heights · Prospect-Lefferts Gardens · Wingate · North Flatbush",
+    "precincts": "Precinct 71",
+    "needs": [
+     "Affordable housing",
+     "Infrastructure resiliency",
+     "Trash removal &amp; cleanliness"
+    ],
+    "note": "Wants zoning calibrated block by block to preserve existing housing, not spur demolition and warehousing.",
+    "flag": null,
+    "statement_url": "https://www.nyc.gov/assets/brooklyncb9/downloads/pdf/2025/FY2026_Statement_BK09.pdf",
+    "statement_label": "Statement of needs (FY2026)"
+   },
+   "312": {
+    "hoods": "Borough Park · Sunset Park",
+    "precincts": "Precinct 66",
+    "needs": [
+     "Traffic congestion &amp; parking",
+     "Trash removal &amp; cleanliness",
+     "Affordable housing",
+     "Reconstruct 37th St (14th–15th Ave)"
+    ],
+    "note": "Private schools — most of local enrollment — get no daily trash pickup.",
+    "flag": null,
+    "statement_url": "https://www.nyc.gov/site/brooklyncb12/index.page",
+    "statement_label": "Community Board 12 ↗"
+   },
+   "314": {
+    "hoods": "Flatbush · Midwood",
+    "precincts": "Precinct 70",
+    "needs": [
+     "Park access — highest share citywide living over ¼ mile from a park",
+     "Affordable housing &amp; deteriorating housing stock",
+     "Health care &amp; services for seniors, homebound, and homeless residents",
+     "Rehabilitate Umma Park &amp; Campus Road Tot Lot; Newkirk Plaza pedestrian plaza"
+    ],
+    "note": "Housing-code violations have climbed to 879 per 1,000 units (from 506 in 2010).",
+    "flag": null,
+    "statement_url": "https://cb14brooklyn.com/wp-content/uploads/2025/12/FY2027_Statement-of-Community-District-Needs-and-CB-Requests_BK14.pdf",
+    "statement_label": "Statement of needs (FY2027)"
+   },
+   "317": {
+    "hoods": "East Flatbush",
+    "precincts": "Precinct 67",
+    "needs": [
+     "Affordable housing",
+     "Health care services",
+     "Roadway maintenance",
+     "Air-quality monitoring &amp; solar hubs"
+    ],
+    "note": "Highest foreclosure rate in Brooklyn (10.5 per 1,000 small homes).",
+    "flag": null,
+    "statement_url": "https://cbbrooklyn.cityofnewyork.us/cb17/wp-content/uploads/sites/6/2026/01/FY2027_Statement_BK17.pdf",
+    "statement_label": "Statement of needs (FY2027)"
+   }
+  },
+  "community_boards_prov": "Neighborhoods, boards, and priorities from each board's Statement of Community District Needs (FY2027 where posted) and the NYC Department of City Planning Community Profiles. Compiled with the office of Sen. Myrie, retrieved 2026-08-03."
+ }
+}

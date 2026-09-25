@@ -20,20 +20,25 @@ The current pilot is built for **NY State Senate District 20 (Sen. Zellnor Myrie
   grouped into one story, tagged by topic, filterable.
 
 ## How it's built
-`build/build_portal.py` fetches each source, writes one JSON per pane (each with a provenance block)
-into `data/`, and bakes them into `data/portal_data.js`. `index.html` is presentation only and runs
-from a static file or GitHub Pages — no server.
+One shared page, many districts. `index.html` reads `?d=<code>` (e.g. `?d=AD-43`) and loads that
+district's data from `data/<code>/`; a sticky bar at the top switches between every district that
+has been built. Everything specific to a district lives in data, so an edit to `index.html` applies
+to all of them at once.
 
 ```
-python3 build/build_portal.py     # regenerate everything
-python3 build/refresh.py          # news + legislation only (runs daily in CI; standard library only)
-python3 build/maplayers.py        # map layers only (runs monthly in CI; needs shapely)
-python3 build/acs_static.py       # census-tract layers + birthplace/language (yearly, by hand; needs geopandas
-                                  #   and CENSUS_API_KEY — the Census API no longer answers without a key)
-open index.html                   # view
+districts/<code>.json             one small config per district (chamber, number, any hand-compiled facts)
+python3 build/district.py SD-20   build or rebuild one district → data/SD-20/ (needs geopandas + both keys)
+python3 build/district.py AD-43 --skip-maps    everything but the slow map layers
+python3 build/maplayers.py AD-43  map layers only (runs monthly in CI for every district)
+python3 build/refresh.py          news + legislation for every district (runs daily in CI)
+open "index.html?d=SD-20"         view
 ```
-`build/news.py` holds the news logic shared by the first two, including the list of outlets that count
-as news organizations.
+To add a district: create `districts/<code>.json` with `{"code":"SD-25","chamber":"senate","number":25}`
+(or `"assembly"`), run `build/district.py <code>`, commit `data/<code>/` and `data/districts.js`.
+Member facts the APIs don't carry (election history, priorities, committees, social accounts) and each
+community board's needs go in the config under `curated`; see `districts/SD-20.json` for the shape.
+Citywide inputs (TIGER lines, borough/council/community-district boundaries, NTAs, citywide ACS) are
+downloaded once into `build/cache/` and reused.
 
 ### Keys (set as environment variables or CI secrets — not committed)
 - `CENSUS_API_KEY` — required as of 2026 ([request one](https://api.census.gov/data/key_signup.html)).

@@ -68,15 +68,15 @@ def geo(g, tol):
     m = mapping(g.simplify(tol))
     return {"type": m["type"], "coordinates": rnd(m["coordinates"])}
 
-def full_tracts():
-    """Whole census tracts that overlap the district (data/tracts_full.json, written by acs_static.py)."""
-    p = DATA / "tracts_full.json"
+def full_tracts(ddir):
+    """Whole census tracts that overlap the district (<district dir>/tracts_full.json, written by acs_static.py)."""
+    p = ddir / "tracts_full.json"
     return [(f["properties"]["tract"], shape(f["geometry"])) for f in json.load(open(p))["features"]] if p.exists() else []
 
-def tract_counts(points):
+def tract_counts(points, ddir):
     """{tract name: number of points inside the WHOLE tract}. Pass every point near the district, not just those
     inside it, so a border tract's count covers the same area as its Census denominator."""
-    shapes = full_tracts()
+    shapes = full_tracts(ddir)
     n = {}
     for lat, lon in points:
         pt = Point(lon, lat)
@@ -86,8 +86,13 @@ def tract_counts(points):
                 break
     return n
 
-def build(g20, step=print, previous=None):
+def build(g20, step=print, previous=None, boros=("BROOKLYN",), counties=("KINGS",), ddir=None, code="the district"):
+    """boros/counties: how the datasets name the boroughs the district touches; ddir: the district's data folder."""
     previous = previous or {}
+    ddir = ddir or DATA
+    boro_in = "(" + ",".join(f"'{b}'" for b in boros) + ")"
+    county_in = "(" + ",".join(f"'{c}'" for c in counties) + ")"
+    boro_word = "/".join(b.title() for b in boros)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
     out = {}
     near = g20.buffer(0.0015)                                      # ~150 m, so lines don't stop dead at the border
@@ -114,7 +119,7 @@ def build(g20, step=print, previous=None):
 
     # --- shootings: NYPD's current incident-level feed, joined to the victim feed for fatalities
     try:
-        where = f"boro='BROOKLYN' AND occur_date>='{SHOOTINGS_SINCE}T00:00:00'"
+        where = f"boro in{boro_in} AND occur_date>='{SHOOTINGS_SINCE}T00:00:00'"
         inc = soda("data.cityofnewyork.us", "5ucz-vwe8", where)
         keys = {r["incident_key"] for r in inc}
         vic = soda("data.cityofnewyork.us", "pztn-9bne", select="incident_key,stat_murder_flg")
@@ -143,7 +148,7 @@ def build(g20, step=print, previous=None):
             "data_through": max((r.get("occur_date") or "")[:10] for r in inc),
             "brooklyn_incidents": len(inc), "brooklyn_missing_coords": n_nocoord}
         step(f"   shootings: {len(pts)} incidents in the district, {SHOOTINGS_SINCE} to "
-             f"{out['shootings_stats']['data_through']}; {n_nocoord}/{len(inc)} Brooklyn incidents lacked coordinates")
+             f"{out['shootings_stats']['data_through']}; {n_nocoord}/{len(inc)} {boro_word} incidents lacked coordinates")
     except Exception as e:
         keep("shootings", e)
         out["shootings_stats"] = previous.get("shootings_stats")
@@ -227,7 +232,7 @@ def build(g20, step=print, previous=None):
 
     # --- evictions: residential, executed
     try:
-        where = f"borough='BROOKLYN' AND residential_commercial_ind='Residential' AND executed_date>='{EVICTIONS_SINCE}'"
+        where = f"borough in{boro_in} AND residential_commercial_ind='Residential' AND executed_date>='{EVICTIONS_SINCE}'"
         erows = soda("data.cityofnewyork.us", "6z8x-wfk4", where)
         ev, n_nocoord = [], 0
         for r in erows:
@@ -241,15 +246,15 @@ def build(g20, step=print, previous=None):
         out["evictions"] = None                                   # shown as a rate by census tract, not as points
         out["evictions_stats"] = {"in_district": len(ev), "first": EVICTIONS_SINCE, "data_through": max((r.get("executed_date") or "")[:10] for r in erows),
                                   "brooklyn_records": len(erows), "brooklyn_missing_coords": n_nocoord,
-                                  "tract_n": tract_counts([ll for ll in (latlon(r) for r in erows) if ll])}
-        step(f"   evictions: {len(ev)} in the district; {n_nocoord}/{len(erows)} Brooklyn records lacked coordinates")
+                                  "tract_n": tract_counts([ll for ll in (latlon(r) for r in erows) if ll], ddir)}
+        step(f"   evictions: {len(ev)} in the district; {n_nocoord}/{len(erows)} {boro_word} records lacked coordinates")
     except Exception as e:
         keep("evictions", e)
         out["evictions_stats"] = previous.get("evictions_stats")
 
     # --- schools, early education, after-school (NYC Facilities Database; every record has coordinates)
     try:
-        where = "boro='BROOKLYN' AND facdomain='EDUCATION, CHILD WELFARE, AND YOUTH'"
+        where = f"boro in{boro_in} AND facdomain='EDUCATION, CHILD WELFARE, AND YOUTH'"
         frows = soda("data.cityofnewyork.us", "ji82-xba5", where,
                      select="uid,facname,address,latitude,longitude,facgroup,facsubgrp,factype,capacity,opname,overabbrev,datasource")
         def edu_kind(r):
@@ -296,7 +301,7 @@ def build(g20, step=print, previous=None):
 
     # --- food retail: every store licensed by NYS Agriculture & Markets, with the floor area on the license
     try:
-        srows = soda("data.ny.gov", "9a8c-vfzj", where="county='KINGS'")
+        srows = soda("data.ny.gov", "9a8c-vfzj", where=f"county in{county_in}")
         NOT_GROCER = ("WALGREEN", "CVS", "RITE AID", "DUANE READE", "DOLLAR", "BEER", "BEVERAGE", "SODA", "PHARMACY", "99 CENT")
         stores, n_nocoord = [], 0
         for r in srows:
@@ -327,14 +332,14 @@ def build(g20, step=print, previous=None):
     # --- tenant complaints to HPD, last 12 months, rolled up to buildings (and to census tracts if the tract file exists)
     try:
         since = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
-        ft = full_tracts()
+        ft = full_tracts(ddir)
         W, S, E, N = unary_union([g20] + [sh for _, sh in ft]).bounds         # whole border tracts reach past the district
         box = f"latitude between {S} and {N} AND longitude between {W} and {E}"
         rows = soda("data.cityofnewyork.us", "ygpa-z7cr", f"{box} AND received_date>='{since}T00:00:00'",
                     select="complaint_id,building_id,bbl,house_number,street_name,apartment,received_date,major_category,"
                            "minor_category,problem_status,latitude,longitude")
         rows = [r for r in rows if r.get("latitude")]
-        tract_n = tract_counts([(float(r["latitude"]), float(r["longitude"])) for r in rows])
+        tract_n = tract_counts([(float(r["latitude"]), float(r["longitude"])) for r in rows], ddir)
         rows = [r for r in rows if g20.contains(Point(float(r["longitude"]), float(r["latitude"])))]
         # residential units per tax lot, from PLUTO, to express complaints per apartment
         pl = soda("data.cityofnewyork.us", "64uk-42ks", f"{box} AND unitsres>0", select="bbl,unitsres")
@@ -367,9 +372,9 @@ def build(g20, step=print, previous=None):
         total = sum(b["n"] for b in blds)
         try:
             nocoord = int(jfetch("https://data.cityofnewyork.us/resource/ygpa-z7cr.json?" + urllib.parse.urlencode({"$select": "count(*)",
-                "$where": f"borough='BROOKLYN' AND latitude IS NULL AND received_date>='{since}T00:00:00'"}))[0]["count"])
+                "$where": f"borough in{boro_in} AND latitude IS NULL AND received_date>='{since}T00:00:00'"}))[0]["count"])
             bk = int(jfetch("https://data.cityofnewyork.us/resource/ygpa-z7cr.json?" + urllib.parse.urlencode({"$select": "count(*)",
-                "$where": f"borough='BROOKLYN' AND received_date>='{since}T00:00:00'"}))[0]["count"])
+                "$where": f"borough in{boro_in} AND received_date>='{since}T00:00:00'"}))[0]["count"])
         except Exception:
             nocoord = bk = None
         out["hpd_stats"] = {"since": since, "through": max(r["received_date"] for r in rows)[:10], "problems": total,
@@ -411,7 +416,7 @@ def build(g20, step=print, previous=None):
             "food": "NYS Dept. of Agriculture and Markets, Retail Food Stores (9a8c-vfzj)",
         },
         "retrieved": now,
-        "method": ("Each layer is clipped to the SD-20 boundary (points kept if inside; subway and bus lines clipped just past the "
+        "method": (f"Each layer is clipped to the {code} boundary (points kept if inside; subway and bus lines clipped just past the "
                    "border). Shootings are one dot per incident, not per victim; an incident is fatal if any victim in NYPD's "
                    "victim file is flagged a murder. NYPD updates the shootings files quarterly."),
         "caveats": ("Points are shown at the location the agency recorded. NYPD places most shootings at the midpoint of a street "
@@ -421,19 +426,14 @@ def build(g20, step=print, previous=None):
     }
     return out
 
-def bake():
-    bundle = {}
-    for name in ("boundary", "trends", "people", "turf", "news", "headline", "member", "maplayers", "legislation"):
-        bundle[name] = json.load(open(DATA / f"{name}.json"))
-    with open(DATA / "portal_data.js", "w") as fh:
-        fh.write("window.PORTAL_DATA = " + json.dumps(bundle, separators=(",", ":")) + ";")
-
 if __name__ == "__main__":
-    def step(msg):
-        print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-    g20 = shape(json.load(open(DATA / "boundary.json"))["features"][0]["geometry"]).buffer(0)
-    prev = json.load(open(DATA / "maplayers.json")) if (DATA / "maplayers.json").exists() else {}
-    step("map layers: precincts, shootings, subway, Citi Bike, bus, evictions, education, food retail")
-    json.dump(build(g20, step, prev), open(DATA / "maplayers.json", "w"))
-    bake()
-    step("wrote data/maplayers.json and re-baked data/portal_data.js — DONE")
+    from common import load_config, bake, step as _step
+    from district import district_geometry
+    cfg = load_config(sys.argv[1] if len(sys.argv) > 1 else "SD-20")
+    g20, counties, boros = district_geometry(cfg)
+    ddir = DATA / cfg["code"]
+    prev = json.load(open(ddir / "maplayers.json")) if (ddir / "maplayers.json").exists() else {}
+    _step(f"{cfg['code']} map layers: precincts, shootings, subway, Citi Bike, bus, evictions, education, food retail, HPD")
+    json.dump(build(g20, _step, prev, boros, counties, ddir, cfg["code"]), open(ddir / "maplayers.json", "w"))
+    bake(cfg["code"])
+    _step("DONE")
