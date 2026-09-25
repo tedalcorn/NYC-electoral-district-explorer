@@ -26,10 +26,12 @@ jobs:
       - name: Rebuild map layers for every district
         run: |
           cd build
+          status=0
           for f in ../districts/*.json; do
             code=$(basename "$f" .json)
-            python3 maplayers.py "$code" || echo "$code failed"
+            python3 maplayers.py "$code" || { echo "::error::$code map layers failed"; status=1; }
           done
+          exit $status
       - name: Commit if changed
         run: |
           git config user.name "district-portal-bot"

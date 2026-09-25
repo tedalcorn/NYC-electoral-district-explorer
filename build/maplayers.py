@@ -427,11 +427,14 @@ def build(g20, step=print, previous=None, boros=("BROOKLYN",), counties=("KINGS"
     return out
 
 if __name__ == "__main__":
-    from common import load_config, bake, step as _step
-    from district import district_geometry
+    from common import BOROS, load_config, bake, step as _step
     cfg = load_config(sys.argv[1] if len(sys.argv) > 1 else "SD-20")
-    g20, counties, boros = district_geometry(cfg)
     ddir = DATA / cfg["code"]
+    # boundary and boroughs come from the district's own built files, so this needs only shapely (no geopandas) — CI runs it monthly
+    g20 = shape(json.load(open(ddir / "boundary.json"))["features"][0]["geometry"]).buffer(0)
+    names = json.load(open(ddir / "district.json"))["boroughs"]
+    boros = [b["boro"] for b in BOROS.values() if b["name"] in names]
+    counties = [b["county"] for b in BOROS.values() if b["name"] in names]
     prev = json.load(open(ddir / "maplayers.json")) if (ddir / "maplayers.json").exists() else {}
     _step(f"{cfg['code']} map layers: precincts, shootings, subway, Citi Bike, bus, evictions, education, food retail, HPD")
     json.dump(build(g20, _step, prev, boros, counties, ddir, cfg["code"]), open(ddir / "maplayers.json", "w"))
