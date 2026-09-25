@@ -10,7 +10,7 @@ Reads districts/<code>.json, writes data/<code>/, then refreshes data/districts.
 Citywide inputs are downloaded once into build/cache/ and shared by every district.
 HARD RULE: no invented data. A failed fetch is an honest gap, never a guess.
 """
-import json, re, sys, urllib.parse
+import json, re, sys, urllib.parse, urllib.request
 from collections import Counter
 import geopandas as gpd
 from shapely.geometry import shape, mapping, Point
@@ -301,6 +301,20 @@ def build(code, skip=()):
     cds = cached_json("community_districts.geojson", "https://data.cityofnewyork.us/api/geospatial/5crt-au7u?method=export&format=GeoJSON")
     cards, geo = [], []
     curated_cb = cur.get("community_boards", {})
+    # Every board's Statement of Community District Needs is published by City Planning in one public
+    # repository; link the newest year that exists for this board (a hand-curated link in the config wins).
+    def needs_statement(bcd):
+        abbr = {1: "MN", 2: "BX", 3: "BK", 4: "QN", 5: "SI"}[bcd // 100]
+        for fy in (2027, 2026, 2025):
+            u = (f"https://github.com/NYCPlanning/labs-cd-needs-statements/raw/master/{abbr}%20DNS%20FY%20{fy}/"
+                 f"FY{fy}_Statement_{abbr}{bcd % 100:02d}.pdf")
+            try:
+                req = urllib.request.Request(u, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+                if urllib.request.urlopen(req, timeout=60).status == 200:
+                    return u, f"Statement of needs (FY{fy})"
+            except Exception:
+                continue
+        return None, None
     for f in cds["features"]:
         bcd = int(prop(f, "boro_cd"))
         if bcd % 100 > 18:                                        # 55, 56, 64, 80s, 95: joint-interest areas (parks, cemeteries, airports), not boards
@@ -312,6 +326,9 @@ def build(code, skip=()):
         boro = {1: "manhattan", 2: "bronx", 3: "brooklyn", 4: "queens", 5: "staten-island"}[bcd // 100]
         n = bcd % 100
         c = curated_cb.get(str(bcd), {})
+        if not c.get("statement_url"):
+            su, sl = needs_statement(bcd)
+            c = {**c, "statement_url": su, "statement_label": sl}
         cards.append({"cd": bcd, "n": n, "boro": boro.replace("-", " ").title(), "share": round(share, 1),
                       "hoods": c.get("hoods"), "precincts": c.get("precincts"), "needs": c.get("needs"), "note": c.get("note"), "flag": c.get("flag"),
                       "statement_url": c.get("statement_url"), "statement_label": c.get("statement_label"),
